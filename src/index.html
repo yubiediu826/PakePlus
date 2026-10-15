@@ -1,0 +1,3616 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkyTimes 升级工具</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   SkyTimes 升级工具
+   .tcupd 组合打包 + TCSD 串口整机升级
+   ========================================================= */
+:root,[data-theme="dark"]{
+  --bg-0:#0B1220;--bg-1:#111B2E;--bg-2:#182338;--bg-3:#1F2C46;--bg-input:#060D1A;
+  --fg-0:#F1F5F9;--fg-1:#CBD5E1;--fg-2:#94A3B8;--fg-3:#64748B;
+  --accent:#22C55E;--accent-dim:#16A34A;--accent-soft:rgba(34,197,94,.12);--accent-glow:0 0 24px rgba(34,197,94,.18);
+  --warn:#F59E0B;--warn-soft:rgba(245,158,11,.12);
+  --danger:#EF4444;--danger-dim:#DC2626;--danger-soft:rgba(239,68,68,.12);
+  --info:#38BDF8;--info-dim:#0EA5E9;--info-soft:rgba(56,189,248,.12);
+  --violet:#A78BFA;--violet-soft:rgba(167,139,250,.12);
+  --amber:#FBBF24;
+  --border:rgba(255,255,255,.08);--border-strong:rgba(255,255,255,.16);
+  --glass:rgba(255,255,255,.04);--glass-strong:rgba(255,255,255,.07);
+  --code-bg:#060D1A;--code-fg:#94A3B8;
+  --shadow-md:0 4px 16px rgba(0,0,0,.35);
+  --topbar-bg:linear-gradient(180deg,rgba(17,27,46,.85),rgba(17,27,46,.55));
+  --sidebar-bg:linear-gradient(180deg,rgba(17,27,46,.92),rgba(11,18,32,.95));
+  --r-sm:8px;--r-md:12px;--r-lg:16px;
+  --font-ui:'Inter','Noto Sans SC','Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --font-mono:'Fira Code','JetBrains Mono',Consolas,'Courier New',monospace;
+  color-scheme:dark;
+}
+[data-theme="light"]{
+  --bg-0:#F8FAFC;--bg-1:#FFFFFF;--bg-2:#F1F5F9;--bg-3:#E2E8F0;--bg-input:#FFFFFF;
+  --fg-0:#0F172A;--fg-1:#1E293B;--fg-2:#475569;--fg-3:#94A3B8;
+  --accent:#16A34A;--accent-dim:#15803D;--accent-soft:rgba(22,163,74,.10);--accent-glow:0 0 0 3px rgba(22,163,74,.12);
+  --warn:#D97706;--warn-soft:rgba(217,119,6,.10);
+  --danger:#DC2626;--danger-dim:#B91C1C;--danger-soft:rgba(220,38,38,.10);
+  --info:#0284C7;--info-dim:#0369A1;--info-soft:rgba(2,132,199,.10);
+  --violet:#7C3AED;--violet-soft:rgba(124,58,237,.10);--amber:#D97706;
+  --border:rgba(15,23,42,.08);--border-strong:rgba(15,23,42,.16);
+  --glass:rgba(15,23,42,.02);--glass-strong:rgba(15,23,42,.04);
+  --code-bg:#F1F5F9;--code-fg:#475569;
+  --shadow-md:0 4px 12px rgba(15,23,42,.06);
+  --topbar-bg:rgba(255,255,255,.85);
+  --sidebar-bg:linear-gradient(180deg,#FFFFFF,#F8FAFC);
+  color-scheme:light;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:var(--font-ui);font-size:14px;line-height:1.5;color:var(--fg-0);
+  background:radial-gradient(1200px 600px at 80% -10%,var(--accent-soft),transparent 60%),
+             radial-gradient(900px 500px at -10% 30%,var(--info-soft),transparent 60%),var(--bg-0);
+  -webkit-font-smoothing:antialiased;overflow:hidden;transition:background-color .25s,color .25s}
+*::-webkit-scrollbar{width:8px;height:8px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:4px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--fg-3);background-clip:padding-box}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ===== Layout ===== */
+.app{display:grid;grid-template-columns:192px 1fr;grid-template-rows:56px 1fr;height:100vh;
+  grid-template-areas:"sidebar topbar" "sidebar main";transition:grid-template-columns .2s ease}
+.app.sidebar-collapsed{grid-template-columns:64px 1fr}
+.sidebar-collapsed .brand{justify-content:center;padding-left:8px;padding-right:8px}
+.sidebar-collapsed .brand-text,
+.sidebar-collapsed .brand-name,
+.sidebar-collapsed .brand-sub,
+.sidebar-collapsed .nav-label{display:none}
+.sidebar-collapsed .nav-item,.sidebar-collapsed .sidebar-toggle{justify-content:center;padding-left:0;padding-right:0}
+.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
+@media(max-width:900px){.app{grid-template-columns:64px 1fr}.sidebar .nav-label,.sidebar .brand-sub{display:none}}
+.sidebar{grid-area:sidebar;background:var(--sidebar-bg);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden}
+/* 折叠态下 brand 只剩一枚图标，下面再压一条横线就成了悬空的「横杠」，
+   视觉上比展开态刺眼得多。去掉后靠 16px padding 自然过渡。 */
+.brand{padding:16px 14px;display:flex;align-items:center;gap:10px}
+.brand-mark{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--accent),var(--info));box-shadow:var(--accent-glow);flex-shrink:0}
+.brand-mark svg{width:20px;height:20px;color:#fff}
+/* 品牌区会随侧栏收窄变窄，文字必须可省略，不能把侧栏撑破 */
+.brand-text{min-width:0;flex:1;overflow:hidden}
+.brand-name{font-weight:700;font-size:13.5px;letter-spacing:.2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand-sub{font-size:10.5px;color:var(--fg-2);font-family:var(--font-mono);margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* overflow-x:hidden 不能省：展开动画期间 .nav-label 的 display:none 已被撤掉，
+   而栅格列宽还在从 64px 往 192px 过渡，.nav-item 的 nowrap 内容比容器宽，
+   底部会闪出一条横向滚动条。列宽到位后溢出消失，横杠也就没了。 */
+.nav{padding:8px;overflow-y:auto;overflow-x:hidden;flex:1}
+/* 分组文字已移除，只留一条细分隔线区分两组 */
+.nav-sep{height:1px;background:var(--border);margin:10px 10px}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;
+  cursor:pointer;color:var(--fg-1);font-size:13px;font-weight:500;transition:background .15s,color .15s;
+  user-select:none;border:1px solid transparent;white-space:nowrap}
+.nav-item:hover{background:var(--glass);color:var(--fg-0)}
+.nav-item.active{background:var(--accent-soft);color:var(--accent);border-color:var(--border);font-weight:600}
+.nav-item.active::before{content:'';position:absolute;left:-1px;top:22%;bottom:22%;width:3px;border-radius:2px;background:var(--accent)}
+.nav-item svg{width:16px;height:16px;flex-shrink:0}
+.sidebar-toggle{margin:12px 8px;padding:8px 10px;display:flex;align-items:center;gap:10px;background:transparent;
+  border:1px solid transparent;border-radius:8px;color:var(--fg-2);font-size:13px;font-weight:500;font-family:inherit;
+  white-space:nowrap;overflow:hidden;   /* 过渡期间列宽不足时不要把「收起侧栏」竖排成四行 */
+  cursor:pointer;transition:background .15s,color .15s}
+.sidebar-toggle:hover{background:var(--glass);color:var(--fg-0)}
+
+/* ===== Topbar ===== */
+/* 栅格是 "sidebar topbar" / "sidebar main" —— 侧栏与顶栏并排，背后只有 body 那层
+   静态渐变，磨它不会有任何视觉变化。留着却要让折叠动画的每一帧都重算一遍整块
+   面积的模糊，开销随视口宽度线性放大。直接去掉，外观不变。 */
+.topbar{grid-area:topbar;background:var(--topbar-bg);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 24px;gap:8px}
+.crumb{color:var(--fg-2);font-size:13px;display:flex;align-items:center;gap:8px;margin-right:8px}
+.crumb .sep{opacity:.4}.crumb strong{color:var(--fg-0);font-weight:600}
+.topbar-spacer{flex:1}
+.status-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;flex-shrink:0;
+  background:var(--glass-strong);color:var(--fg-2);font-size:11px;font-weight:600;border:1px solid var(--border);font-family:var(--font-mono)}
+.status-chip.on{background:var(--accent-soft);color:var(--accent)}
+.status-chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.status-chip.on .dot{box-shadow:0 0 8px var(--accent);animation:pulse 2s infinite}
+/* 纯展示件，不可点：光标不该显示成手型，否则会误导 */
+.status-chip{cursor:default}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.icon-btn{width:32px;height:32px;background:var(--glass);border:1px solid var(--border);border-radius:8px;
+  color:var(--fg-1);cursor:pointer;display:grid;place-items:center;transition:all .15s;flex-shrink:0}
+/* 悬停用 --bg-3 实色而不是 --glass 叠层：浅色主题下 --glass→--glass-strong
+   只从 2% 黑变到 4% 黑，几乎看不出反馈，容易被当成按钮坏了。 */
+.icon-btn:hover{background:var(--bg-3);color:var(--fg-0);border-color:var(--border-strong)}
+/* 语言切换：纯文字按钮，显示「切到的那种语言」 */
+.lang-btn{font-size:12px;font-weight:700;letter-spacing:.5px;padding:0;min-width:38px}
+.icon-btn svg{width:16px;height:16px}
+/* 顶栏只保留状态指示与主题按钮 */
+@media(max-width:860px){.crumb span:first-child,.crumb .sep{display:none}}
+@media(max-width:560px){.status-chip{display:none}}
+
+/* ===== Main ===== */
+/* .main 是定高滚动容器（.app 的 1fr 行）；改为纵向 flex 后，激活页作为 flex 项
+   才能取到确定高度，升级页的 1fr 行才有意义。其它页仍是 flex:0 0 auto 的内容高度。 */
+.main{grid-area:main;overflow-y:auto;padding:24px;display:flex;flex-direction:column}
+.page{display:none}.page.active{display:block;animation:fade .22s ease;flex:0 0 auto}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.page-head{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.page-title{font-size:22px;font-weight:700;letter-spacing:-.3px}
+.page-sub{color:var(--fg-2);font-size:13px;margin-top:4px}
+.page-tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:11px;font-weight:600;border-radius:6px;font-family:var(--font-mono)}
+.tag-r{background:var(--info-soft);color:var(--info);border:1px solid var(--border)}
+.tag-rw{background:var(--warn-soft);color:var(--warn);border:1px solid var(--border)}
+.tag-dp{background:var(--accent-soft);color:var(--accent);border:1px solid var(--border)}
+.tag-v{background:var(--violet-soft);color:var(--violet);border:1px solid var(--border)}
+
+
+/* ===== Card ===== */
+.card{background:var(--bg-1);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;
+  backdrop-filter:blur(8px);margin-bottom:16px}
+.card-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--glass);flex-wrap:wrap}
+.card-head h3{font-size:14px;font-weight:600}
+.card-head .meta{color:var(--fg-2);font-size:12px;font-family:var(--font-mono)}
+.card-head .spacer{flex:1}
+.card-body{padding:18px}
+.card-head-icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--glass-strong);flex-shrink:0}
+.card-head-icon svg{width:15px;height:15px;color:var(--accent)}
+
+/* ===== Buttons / forms ===== */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;font-weight:600;border-radius:8px;
+  border:1px solid var(--border);background:var(--glass);color:var(--fg-0);cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+/* 悬停规则必须逐一对应每个带底色的变体。
+   之前只有 .btn:hover:not(:disabled){background:var(--glass-strong)} 一条，
+   它的特异性 (0,3,0) 高于 .btn-danger 自身的 (0,1,0)，
+   悬停时把红/蓝底色换成了近乎透明的浅色，而 color:#fff 保留 → 白字落在浅底上，文字消失。 */
+.btn:hover:not(:disabled){background:var(--glass-strong);border-color:var(--border-strong)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:#fff;border-color:transparent;box-shadow:var(--accent-glow)}
+.btn-primary:hover:not(:disabled){background:var(--accent-dim);border-color:transparent}
+.btn-danger{background:var(--danger);color:#fff;border-color:transparent}
+.btn-danger:hover:not(:disabled){background:var(--danger-dim);border-color:transparent}
+
+
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn-lg{padding:12px 22px;font-size:14px;border-radius:10px}
+.btn svg{width:14px;height:14px;flex-shrink:0}
+.btn-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.input{width:100%;background:var(--bg-input);color:var(--fg-0);border:1px solid var(--border);border-radius:8px;
+  padding:8px 11px;font-size:13px;font-family:var(--font-mono);transition:border-color .15s,box-shadow .15s}
+.input:focus{outline:none;border-color:var(--accent);box-shadow:var(--accent-glow)}
+select.input{font-family:var(--font-ui);cursor:pointer}
+.input:read-only{opacity:.65}
+.hint{font-size:11px;color:var(--fg-3);margin-top:4px;font-family:var(--font-mono)}
+.check{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:500;user-select:none;white-space:nowrap}
+.check input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--fg-2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px}
+.grid{display:grid;gap:12px}
+
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1200px){.grid-3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:1100px){.grid-3{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.grid-3{grid-template-columns:1fr}}
+
+/* ===== 制作台（仿参考工具的表格式录入） ===== */
+.mk{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.mk-hd,.mk-row{display:grid;grid-template-columns:92px 92px 1fr 88px 128px;gap:10px;align-items:center;padding:9px 12px}
+.mk-code{font-family:var(--font-mono);font-weight:700;letter-spacing:.3px;color:var(--fg-0)}
+.mk-hd{background:var(--bg-2);font-size:11px;font-weight:600;color:var(--fg-2);text-transform:uppercase;letter-spacing:.5px}
+.mk-row{border-top:1px solid var(--border);transition:background .15s}
+.mk-row:hover{background:var(--glass)}
+.mk-row.on{background:var(--accent-soft)}
+.mk-row .input{padding:6px 9px;font-size:12.5px}
+.mk-file{display:flex;align-items:center;gap:8px;min-width:0}
+.mk-file .fn{flex:1;min-width:0;font-family:var(--font-mono);font-size:11.5px;color:var(--fg-1);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mk-file .fn.empty{color:var(--fg-3);font-family:var(--font-ui);font-size:12px}
+.mk-info{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);text-align:center;line-height:1.35}
+.mk-info b{color:var(--accent);font-weight:600}
+.mk-info .bad{color:var(--danger)}
+.mk-entry{font-family:var(--font-mono);font-size:10.5px;color:var(--fg-3);display:block;margin-top:2px}
+@media(max-width:860px){
+  .mk-hd{display:none}
+  .mk-row{grid-template-columns:1fr 1fr;gap:8px}
+  .mk-file{grid-column:1/-1}
+}
+
+/* ===== 输出区 ===== */
+.out{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+@media(max-width:700px){.out{grid-template-columns:1fr}}
+.out-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.out-bar > .input{flex:1 1 200px;min-width:160px}
+
+/* ===== Tables ===== */
+.field-table{width:100%;border-collapse:collapse}
+.field-table th,.field-table td{padding:8px 12px;text-align:left;font-size:12px;border-bottom:1px solid var(--border)}
+.field-table th{background:var(--glass);color:var(--fg-2);font-weight:600;text-transform:uppercase;letter-spacing:.5px;font-size:10px}
+.field-table tbody tr:hover{background:var(--glass)}
+.field-table .name{font-weight:500}
+.field-table .mono{font-family:var(--font-mono);color:var(--info);font-size:11px}
+.field-table .val{font-family:var(--font-mono);font-weight:600;color:var(--accent)}
+.field-table .dim{color:var(--fg-3)}
+.field-table .raw{font-family:var(--font-mono);color:var(--fg-2);font-size:11px}
+
+.tbl-wrap{overflow-x:auto}
+/* 解析页清单有 12 列，窄屏下必须横向滚动，
+   否则 width:100% 会把设备名压成逐字竖排 */
+#pTable{min-width:980px}
+
+/* ===== notice ===== */
+.notice{padding:10px 14px;border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:16px;
+  border:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+.notice svg{width:15px;height:15px;flex-shrink:0;margin-top:2px}
+.notice.info{background:var(--info-soft);color:var(--info)}
+.notice.warn{background:var(--warn-soft);color:var(--warn)}
+.notice b{color:var(--fg-0)}
+
+/* ===== 设置页 ===== */
+.set-list{display:flex;flex-direction:column}
+.set-row{display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:start;
+  padding:14px 0;border-bottom:1px dashed var(--border)}
+.set-row:last-child{border-bottom:none}
+.set-lbl b{display:block;font-size:13px;font-weight:600}
+.set-lbl span{display:block;font-size:11.5px;color:var(--fg-2);margin-top:2px}
+.set-ctl{max-width:360px}
+.set-ctl .input{width:100%}
+#sSaved{color:var(--accent);opacity:0;transition:opacity .3s}
+#sSaved.show{opacity:1}
+@media(max-width:760px){.set-row{grid-template-columns:1fr;gap:8px}.set-ctl{max-width:none}}
+.info-rows{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:12px;font-family:var(--font-mono)}
+.info-rows .k{color:var(--fg-3);white-space:nowrap}
+.info-rows .v{color:var(--fg-0);font-weight:600;word-break:break-all}
+
+/* ===== Progress ===== */
+/* ===== 升级进度卡 =====
+   布局原则：整机进度只有一处（百分比 + 一条粗条），本台进度由分段块的
+   填充比例表达，不再单列百分比 —— 两个分母不同的百分比并排显示，
+   用户分不清 1% 是整台还是本台。 */
+.ux{padding:2px 0 0}
+.ux-top{display:flex;align-items:flex-start;gap:16px}
+.ux-l{flex:1;min-width:0}
+.ux-tags{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.ux-tag{font-size:10.5px;font-weight:700;letter-spacing:.8px;padding:3px 9px;border-radius:20px;
+  background:var(--glass-strong);color:var(--fg-3);text-transform:uppercase;white-space:nowrap}
+.ux-state{font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;
+  background:var(--info-soft);color:var(--info);white-space:nowrap}
+.ux-state.wait{background:var(--warn-soft);color:var(--warn)}
+.ux-state.idle{background:var(--glass-strong);color:var(--fg-3)}
+.ux-state.ok{background:var(--accent-soft);color:var(--accent)}
+.ux-state.err{background:var(--danger-soft);color:var(--danger)}
+.ux-name{font-size:27px;font-weight:700;line-height:1.15;letter-spacing:-.4px;color:var(--fg-0);
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* 设备号 / 版本号：值前面挂一个字段名，避免光看 S240、V211 不知道是什么 */
+.ux-fld{display:inline-flex;align-items:center;gap:6px}
+.ux-fld[hidden]{display:none}
+.ux-fld-k{font-size:11px;font-weight:600;color:var(--fg-3);letter-spacing:.4px}
+.ux-name .ux-dev{font-family:var(--font-mono);font-size:17px;font-weight:600;color:var(--fg-1)}
+.ux-name .ux-ver{font-family:var(--font-mono);font-size:14px;font-weight:700;color:var(--accent);
+  background:var(--accent-soft);padding:3px 10px;border-radius:var(--r-sm);letter-spacing:.3px}
+.ux-sub{font-family:var(--font-mono);font-size:12px;color:var(--fg-2);margin-top:7px}
+.ux-r{flex-shrink:0;text-align:right}
+.ux-pct{font-size:46px;font-weight:700;font-family:var(--font-mono);line-height:1;letter-spacing:-2px;color:var(--fg-0)}
+.ux-pct b{font-weight:700}
+.ux-pct span{font-size:22px;color:var(--fg-3);margin-left:2px}
+.ux-pctlbl{font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--fg-3);text-transform:uppercase;margin-top:6px}
+.ux-pct.ok{color:var(--accent)} .ux-pct.err{color:var(--danger)} .ux-pct.wait{color:var(--warn)}
+.ux-track{height:20px;background:var(--bg-3);border-radius:10px;overflow:hidden;margin:14px 0 10px}
+.ux-fill{height:100%;width:0;border-radius:10px;background:linear-gradient(90deg,var(--accent-dim),var(--accent));
+  box-shadow:var(--accent-glow);transition:width .2s linear}
+.ux-fill.wait{background:linear-gradient(90deg,var(--warn),var(--amber));box-shadow:var(--warn-soft)}
+.ux-fill.err{background:linear-gradient(90deg,var(--danger-dim),var(--danger));box-shadow:none}
+.ux-fill.indet{width:100%!important;background:linear-gradient(90deg,transparent,var(--info),transparent);
+  background-size:200% 100%;animation:sweep 1.1s linear infinite;opacity:.7}
+@keyframes sweep{from{background-position:200% 0}to{background-position:-200% 0}}
+.ux-meta{display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:space-between}
+.ux-ml{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.ux-ovr{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-2)}
+.ux-ovr b{color:var(--fg-0);font-weight:600}
+.ux-segs{display:flex;gap:5px;align-items:center;flex-shrink:0}
+.ux-seg{width:26px;height:9px;border-radius:3px;background:var(--bg-3);position:relative;overflow:hidden}
+.ux-seg.ok{background:var(--accent)}
+.ux-seg.err{background:var(--danger)}
+.ux-seg.cur{box-shadow:0 0 0 2px var(--info-soft)}
+.ux-seg.cur>i{position:absolute;inset:0 auto 0 0;background:var(--info);border-radius:3px}
+.ux-mr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-family:var(--font-mono);
+  font-size:11.5px;color:var(--fg-2);min-width:0}
+.ux-mr:empty{display:none}
+/* 下一台：单行。当前台信息已升格成主位，不再需要「当前 / 下一台」并排 */
+.ux-next{display:flex;align-items:center;gap:9px;margin-top:12px;padding-top:12px;
+  border-top:1px dashed var(--border);font-size:12px;min-width:0}
+.ux-next[hidden]{display:none}
+.ux-next b{font-weight:600;color:var(--fg-0);flex-shrink:0}
+.ux-next span:last-child{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 结束态结果条 */
+.ux-res{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+.ux-res[hidden]{display:none}
+.ux-chip{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11.5px;
+  padding:5px 11px;border-radius:var(--r-sm);background:var(--glass);
+  border:1px solid var(--border);color:var(--fg-2)}
+.ux-chip b{color:var(--fg-0);font-weight:700}
+.ux-chip.ok b{color:var(--accent)} .ux-chip.err b{color:var(--danger)} .ux-chip.warn b{color:var(--warn)}
+/* 卡片标题栏里的包信息：保持一行，超出即省略（完整内容挂 title 提示） */
+.card-head .meta.ell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#page-upgrade .up-body>.card:first-child .card-head{flex-wrap:nowrap}
+#uSlotHint{max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ===== 升级页 ===== */
+/* 高度链必须全程确定，否则 flex:1 / 1fr 会退回内容高度，日志一多就把上方顶变形：
+     .main(定高) → #page-upgrade(flex:1) → .up-body(flex:1) → .log-card(flex:1) → .card-body(flex:1) → #uLog(flex:1)
+   进度卡固定 flex:0 0 auto，永不参与压缩，因此日志行数再多也只影响日志盒自身滚动。 */
+#page-upgrade.active{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+#page-upgrade .up-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:16px}
+#page-upgrade .up-body>.card{margin-bottom:0;display:flex;flex-direction:column;overflow:hidden}
+#page-upgrade .up-body>.card>.card-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#page-upgrade .up-body>.card:first-child{flex:0 0 auto}
+#page-upgrade .up-body>.card:first-child>.card-body{justify-content:flex-start;overflow:visible}
+/* 日志卡常驻展开：进度卡按内容取高，日志卡吃满剩余高度。
+   #uLog 是确定高度链的末端，日志再多也只影响日志盒自身滚动。
+   min-height 给到 270px：统计底栏（胶囊 ~22px + margin-top 8px）现在占在卡体内，
+   是实打实从日志盒身上切掉的高度，得先留够再给日志。
+   高度链上 .card-body 是 min-height:0、卡片还带 overflow:hidden，
+   内容撑不开外层，只能靠卡片自身的下限给日志区留位置。
+   不给下限时实测日志区只剩 118px（约 5 行），排障时连一次握手都看不全；
+   也不能给太大 —— 进度卡是 flex:0 0 auto 不会让路，日志卡一旦超出视口，
+   底部（含统计底栏）会被裁掉且无法滚动到。270px 是两头都能看的折中。 */
+#page-upgrade .up-body>.log-card{flex:1 1 auto;min-height:270px}
+/* ===== Steps ===== */
+
+.step{flex:1;min-width:110px;padding:10px 14px;border-bottom:2px solid var(--border);color:var(--fg-3);
+  font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;transition:all .2s}
+.step .dot{width:18px;height:18px;border-radius:50%;border:2px solid currentColor;display:grid;place-items:center;
+  font-size:10px;flex-shrink:0;font-family:var(--font-mono)}
+.step.done{color:var(--accent);border-color:var(--accent)}
+.step.done .dot{background:var(--accent);border-color:var(--accent);color:#fff}
+.step.cur{color:var(--info);border-color:var(--info)}
+.step.cur .dot{border-color:var(--info);animation:pulse 1.4s infinite}
+.step.fail{color:var(--danger);border-color:var(--danger)}
+.step.fail .dot{background:var(--danger);border-color:var(--danger);color:#fff}
+
+/* ===== Log ===== */
+/* 日志区（元素就是 #uLog，class 已删）。
+   样式只此一处：此前 .log-box 与 #uLog 各写一份，后者权重更高且把 min-height 清成 0，
+   改前者不生效 —— 两边互相覆盖的坑，合掉。
+   不带边框：卡片外框 + 卡头分隔线已经分了两层，再套一层就成了「卡中卡」。
+   靠 code 底色区分 —— 浅色 #F1F5F9 对 #FFFFFF、深色 #060D1A 对 #111B2E，对比都够。
+   底部 30px 内边距留给右下角的统计浮层，滚到底也不压字。 */
+/* 下内边距只留 8px：原先给右下角浮层留的 30px 已随浮层一起撤掉，
+   统计改成日志框下方的底栏，日志行不再需要绕开任何东西。
+   浮层在时那 30px 是「给控件留的空地」，每一行都插在空地里，视觉上是断的。 */
+#uLog{background:var(--code-bg);border:0;border-radius:var(--r-md);
+  font-family:var(--font-mono);font-size:11.5px;line-height:1.65;
+  padding:10px 12px 8px;
+  flex:1 1 auto;min-height:140px;height:auto;overflow-y:auto}
+/* 不再需要 position:relative：卡体内唯一的绝对定位元素（统计浮层）已经撤掉 */
+#uLogCard>.card-body{padding:14px 18px 18px}
+
+.hint.right{text-align:right}
+/* content-visibility:auto —— 这一条是日志卡不卡顿的总开关。
+   一条日志行不是 1 个节点而是 8~10 个（.t + .lvl + .pfx + 若干 .lf-* + 文本节点），
+   一千多条就是一万上下个节点，且每行都是 pre-wrap + break-all 的可折行文本。
+   关掉视口外的这些行，浏览器对它们连样式重算、布局、绘制都直接跳过，
+   于是所有全局操作（下面三处）的代价从「按总行数」变成「按可见行数（三十来行）」：
+     1) .app 过渡 grid-template-columns —— 侧栏折叠动画每帧都要重排整个 1fr 列，
+        原来每帧重新折行+塑形一万个文本片段，现在只有屏幕上的几十行；
+     2) 切主题 —— 换 data-theme 就是重定义 :root 上的三十来个自定义属性，
+        继承链上每个引用 var(--...) 的元素都得重算样式，日志区占了大头；
+     3) 切语言 —— 改 <html lang> 会让整篇文档重新选字体，原本也包括这一万个节点。
+   contain-intrinsic-size 的 auto 关键字让浏览器记住每行上次真实渲染出来的高度，
+   没渲染过的先用 21px 占位（11.5px × 1.65 行高 + 上下各 1px 内边距），
+   这样滚动条长度不会随渲染进度乱跳。
+   注意用的是 textContent 而不是 innerText 去读日志：content-visibility 跳过的
+   子树 innerText 会返回空串（它依赖布局），textContent 拿的是 DOM 原文，不受影响。 */
+.log-line{display:flex;gap:10px;white-space:pre-wrap;word-break:break-all;padding:1px 0;
+  content-visibility:auto;contain-intrinsic-size:auto 21px}
+.log-line .t{color:var(--fg-3);flex-shrink:0}
+.log-line .m{flex:1;min-width:0}
+/* 日志配色：常规走正文色（浅色主题下即黑），只有语义状态才着色。
+   收发方向改由 [TX] / [RX] 前缀承担：整行着色时，一长串十六进制会把
+   前缀的颜色冲淡，扫一眼分不出是谁发的。 */
+.log-tx,.log-rx,.log-info{color:var(--fg-0)}
+/* [TX] 蓝、[RX] 绿，与卡头图例同一套颜色 */
+.log-tx .pfx-tx{color:var(--info);font-weight:700}
+.log-rx .pfx-rx{color:var(--accent);font-weight:700}
+.log-err{color:var(--danger)}
+.log-warn{color:var(--warn)}
+.log-ok{color:var(--accent);font-weight:600}
+.log-head{color:var(--fg-0);font-weight:700}
+/* 级别标签：[INFO] / [WARN] / [ERROR] */
+.lvl{flex-shrink:0;font-size:10.5px;font-weight:700;letter-spacing:.4px;padding:0 5px;
+  border-radius:3px;margin-right:6px}
+.lvl-info{color:var(--fg-3);background:var(--glass-strong)}
+.lvl-warn{color:var(--warn);background:var(--warn-soft)}
+.lvl-error{color:var(--danger);background:var(--danger-soft)}
+/* 帧行四段与结构化键值 */
+.lf-len{color:var(--fg-3)}
+.lf-hex{color:var(--info)}
+.lf-parsed{color:var(--violet)}
+.lf-crc{color:var(--fg-2)}
+.lf-crc-ok{color:var(--accent)}
+.lf-crc-fail{color:var(--danger);font-weight:700}
+.lf-sep{color:var(--border-strong)}
+.lf-label{color:var(--accent);font-weight:700}
+.lf-k{color:var(--fg-3)}
+.lf-v{color:var(--fg-1)}
+/* 收发统计：放在日志框**下面**的一行，不再浮在日志框右下角。
+   [TX] / [RX] 与日志正文里的前缀同一套词、同一套颜色，扫一眼就知道哪半边是发送、哪半边是接收；
+   数字比标签大一档 —— 统计是这轮升级里最该被一眼看到的东西，不能再当装饰文字。
+   为什么从浮层改成底栏：浮层要压在日志正文上，只能靠给 #uLog 预留 30px 下内边距，
+   可那 30px 是「给浮层留的空地」，行与行之间都会多出一截空白；
+   真正压字的情况是最后几行 —— 日志滚到底时正文正贴着浮层，窄屏或长 hex 行
+   直接钻到浮层底下叠在一起，看不清也选不中。
+   底栏不遮任何一行，右对齐贴着卡片内边距，占的是本来就空着的下方空间。 */
+.lstats{display:flex;align-items:center;justify-content:flex-end;gap:6px;
+  flex:0 0 auto;margin-top:8px}
+.lstat{display:inline-flex;align-items:baseline;gap:4px;padding:2px 9px;border-radius:999px;
+  background:var(--code-bg);border:1px solid var(--border);color:var(--fg-2);
+  font-family:var(--font-mono);font-size:11px;line-height:1.5;white-space:nowrap}
+.lstat .lk{font-weight:700}
+.lstat .lw{color:var(--fg-3)}
+.lstat b{color:var(--fg-0);font-weight:700;font-size:12.5px}
+.lstat.tx .lk{color:var(--info)}
+.lstat.rx .lk{color:var(--accent)}
+/* 自动保存状态行：与底栏统计同一块区域，排在统计左边。
+   文案全是动态的（累计条数 + 当前目录），不进 tr() 静态扫描，
+   已在 I18N_SKIP 里登记，由 renderLogAutoInfo() 整段重写。 */
+.lauto{display:flex;align-items:center;gap:6px;margin:8px 0 0;
+  font-family:var(--font-mono);font-size:11px;color:var(--fg-3);line-height:1.5}
+.lauto .lai{width:6px;height:6px;border-radius:50%;background:var(--fg-3);flex-shrink:0}
+.lauto.on .lai{background:var(--accent)}
+.lauto.warn .lai{background:var(--warn)}
+.lauto b{color:var(--fg-2);font-weight:700}
+
+/* ===== 漫游式引导 ===== */
+/* 遮罩由 4 块 div（上/下/左/右）拼出中间的目标洞，但**一律不做过渡**——
+   位置在 JS 里一次性设定，切换步骤时瞬时对齐。只有描边环与气泡缓动。
+   前两种尝试的教训都记在这：
+     · 四块遮罩 + transition → 过渡帧里相邻块错开一条缝，闪白/灰线；
+     · 单块 clip-path polygon(evenodd) + transition → 顶点数虽相同，
+       但起点/走向不同的两组多边形无法可靠插值，动画会卡死在中间态（斜线）。
+   现在「遮罩瞬切、环与气泡缓动」，两者互不牵连，也就没有缝与卡帧。 */
+.tour{position:fixed;inset:0;z-index:120}
+.tour[hidden]{display:none}
+.tour-shade{position:fixed;background:rgba(4,9,20,.66);backdrop-filter:blur(1.5px)}
+/* 高亮描边只画一圈，pointer-events:none 让用户仍能点到洞里的真实按钮 */.tour-ring{position:fixed;border-radius:12px;border:2px solid var(--accent);box-shadow:0 0 0 4px var(--accent-soft),var(--accent-glow);
+  pointer-events:none;transition:all .28s cubic-bezier(.4,0,.2,1)}
+.tour-pop{position:fixed;width:min(360px,calc(100vw - 32px));background:var(--bg-1);
+  border:1px solid var(--border-strong);border-radius:var(--r-lg);box-shadow:var(--shadow-md);
+  padding:14px 16px 12px;transition:all .28s cubic-bezier(.4,0,.2,1)}
+.tour-pop-hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.tour-idx{font-family:var(--font-mono);font-size:10.5px;font-weight:700;color:var(--accent);
+  background:var(--accent-soft);padding:2px 7px;border-radius:6px;flex-shrink:0}
+.tour-title{font-size:14px;font-weight:700;letter-spacing:-.2px;min-width:0}
+.tour-body{font-size:12.5px;line-height:1.65;color:var(--fg-1)}
+.tour-body code{font-family:var(--font-mono);font-size:11.5px;background:var(--code-bg);
+  color:var(--info);padding:1px 5px;border-radius:4px}
+.tour-foot{display:flex;align-items:center;gap:8px;margin-top:14px}
+.tour-dots{display:flex;gap:5px;margin-top:10px;justify-content:center}
+.tour-dots i{width:5px;height:5px;border-radius:50%;background:var(--border-strong);transition:all .2s}
+.tour-dots i.on{background:var(--accent);width:14px;border-radius:3px}
+@media(max-width:560px){.tour-pop{width:calc(100vw - 24px)}}
+
+/* ===== Hex ===== */
+/* 图片式十六进制视图：表头列名固定在顶部、每行等宽成格，
+   选中字节高亮成方块 —— 整体观感接近截图里的 hex 工具，
+   而不是一串带颜色的纯文本。 */
+.hexdump{background:var(--code-bg);border:1px solid var(--border);border-radius:var(--r-md);
+  padding:10px 12px;font-family:var(--font-mono);font-size:11.5px;line-height:1.6;
+  overflow-x:auto;max-height:460px}
+/* 列头：00 01 … 0F 与 ASCII，粘在表格上方，横向滚动时不动 */
+.hexdump table{border-collapse:separate;border-spacing:0;width:100%}
+.hexdump thead th{position:sticky;top:0;z-index:2;background:var(--code-bg);
+  color:var(--fg-3);font-weight:600;font-size:10.5px;letter-spacing:.5px;
+  padding:2px 0 6px;text-align:center;white-space:nowrap}
+/* 表头与数据必须用同一套对齐与内边距，否则列名会相对数值漂移。
+   地址列右对齐并留右间距，ASCII 列左对齐并留左间距，字节列居中。 */
+.hexdump thead th.lead{text-align:right;padding-right:12px}
+.hexdump thead th.asc{text-align:left;padding-left:14px}
+.hexdump tbody td{padding:1px 0;text-align:center;white-space:nowrap}
+/* 地址列与 ASCII 列加左右留白，与 hex 网格分开 */
+.hexdump .lead{text-align:right;padding-right:12px;color:var(--fg-3);background:var(--code-bg)}
+.hexdump .byte{color:var(--code-fg);min-width:19px}
+/* 表头字节格与数据格必须等宽：min-width 只作用在各自元素上，
+   不给表头同一宽度时，两行会按各自内容分列，列名与数值就对不上。 */
+.hexdump thead th.byte{min-width:19px}
+.hexdump .asc{text-align:left;padding-left:14px;color:var(--fg-2)}
+/* 0x00 行整体压暗：包里大量未用字节，不压暗会盖住真正有内容的区域 */
+.hexdump tbody tr.zero .byte{color:var(--fg-3);opacity:.55}
+.hexdump tbody tr.zero .asc{color:var(--fg-3);opacity:.5}
+/* 行悬停高亮，方便横着扫一整行 */
+.hexdump tbody tr:hover .byte,.hexdump tbody tr:hover .lead,.hexdump tbody tr:hover .asc{background:var(--glass-strong)}
+.hexdump .mg{color:var(--accent);font-weight:600}.hexdump .mi{color:var(--info);font-weight:600}
+.hexdump .mw{color:var(--warn);font-weight:600}.hexdump .mr{color:var(--danger);font-weight:600}
+/* 行内间隔列：把 8 个字节分成两组十六进制，扫读时不容易串行 */
+.hexdump .gap{width:12px}
+
+/* 消息日志：右下角堆叠，最新一条贴角在最下、旧的向上堆；SVG 图标 + 状态标签 + 文本 */
+.toast-wrap{position:fixed;bottom:20px;right:20px;z-index:99;
+  display:flex;flex-direction:column;gap:8px;pointer-events:none;
+  max-width:min(420px,calc(100vw - 40px))}
+.toast{pointer-events:auto;cursor:pointer;display:flex;align-items:flex-start;gap:9px;
+  padding:10px 14px;border-radius:10px;background:var(--bg-2);
+  border:1px solid var(--border-strong);border-left:3px solid var(--fg-3);
+  box-shadow:var(--shadow-md);animation:toastin .26s cubic-bezier(.22,1,.36,1)}
+.toast>svg{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+.toast .tt{font-size:11px;font-weight:700;letter-spacing:.6px;flex-shrink:0;margin-top:1px}
+.toast .tx{font-size:12.5px;line-height:1.5;color:var(--fg-0);min-width:0;word-break:break-word}
+.toast.ok{border-left-color:var(--accent)}
+.toast.err{border-left-color:var(--danger)} .toast.err>svg,.toast.err .tt{color:var(--danger)}
+.toast.warn{border-left-color:var(--warn)}  .toast.warn>svg,.toast.warn .tt{color:var(--warn)}
+.toast.info{border-left-color:var(--info)}  .toast.info>svg,.toast.info .tt{color:var(--info)}
+.toast.ok>svg,.toast.ok .tt{color:var(--accent)}
+/* 入场从屏幕右缘整条滑入，退场反向滑出：
+   之前只 translateX(18px) 的微位移，看起来像淡入而不是「弹出」。 */
+@keyframes toastin{from{opacity:0;transform:translateX(104%)}to{opacity:1;transform:none}}
+@keyframes toastout{to{opacity:0;transform:translateX(104%)}}
+.toast.out{animation:toastout .22s cubic-bezier(.4,0,1,1) forwards}
+.spacer{flex:1}
+.mono{font-family:var(--font-mono)}
+.dim{color:var(--fg-3)}
+.center{text-align:center}
+.mt{margin-top:14px}
+/* 视觉隐藏但仍可聚焦的文件输入（保持可访问性与自动化可达） */
+.vh-file{position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+<symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="m5 3 14 9-14 9V3z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></symbol>
+<symbol id="i-chip" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></symbol>
+<symbol id="i-usb" viewBox="0 0 24 24"><circle cx="10" cy="7" r="1"/><circle cx="4" cy="20" r="1"/><path d="M4.7 19.3 19 5"/><path d="m15 5 4 4"/><path d="m21 3-3.5 3.5"/><path d="m13 7 3.5-3.5L15 2"/><path d="M10 11v5c0 .6-.4 1-1 1v2"/><path d="M10 8.5V5"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6M12 19h8"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7l10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+<symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.2 7.8-2.5 6-6 2.5 2.5-6z"/></symbol>
+</defs></svg>
+
+<div class="app sidebar-collapsed" id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><svg><use href="#i-bolt"/></svg></div>
+      <div class="brand-text"><div class="brand-name">SkyTimes</div><div class="brand-sub">固件升级工具</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" data-page="upgrade"><svg><use href="#i-plug"/></svg><span class="nav-label">整机升级</span></div>
+      <div class="nav-item" data-page="builder"><svg><use href="#i-box"/></svg><span class="nav-label">固件制作</span></div>
+      <div class="nav-item" data-page="parse"><svg><use href="#i-search"/></svg><span class="nav-label">固件解析</span></div>
+      <div class="nav-sep"></div>
+      <div class="nav-item" data-page="settings"><svg><use href="#i-chip"/></svg><span class="nav-label">设置</span></div>
+    </nav>
+    <button class="sidebar-toggle" id="sidebarToggle"><svg width="16" height="16"><use href="#i-chev-l"/></svg><span class="nav-label">收起侧栏</span></button>
+  </aside>
+
+  <header class="topbar">
+    <div class="crumb"><span>SkyTimes</span><span class="sep">/</span><strong id="crumbNow">整机升级</strong></div>
+    <div class="topbar-spacer"></div>
+    <div class="status-chip" id="connChip" title="串口状态"><span class="dot"></span><span id="connText">未连接</span></div>
+    <button class="btn btn-sm btn-primary" id="uConnToggle">
+      <svg><use href="#i-plug"/></svg><span>连接</span></button>
+    <button class="icon-btn lang-btn" id="langBtn" title="切换语言"><span id="langLbl">EN</span></button>
+    <button class="icon-btn" id="themeBtn" title="切换主题"><svg><use href="#i-moon"/></svg></button>
+  </header>
+
+  <main class="main">
+
+  <!-- ================= 固件制作 ================= -->
+  <section class="page" id="page-builder">
+    <div class="page-head">
+      <div>
+        <div class="page-title">固件制作</div>
+        <div class="page-sub">按设备录入 设备号 / 版本号 / 源文件，勾选后合成 .tcupd</div>
+        <div class="page-tags">
+          <span class="tag tag-dp">包头 256 B</span><span class="tag tag-r">自动 sum16 / xor8</span>
+          <span class="tag tag-v">devmap 自动生成</span><span class="tag tag-rw">Tps_日期.tcupd</span>
+        </div>
+      </div>
+      <span class="spacer"></span>
+      <div class="btn-row">
+        <button class="btn" id="bGuideBtn"><svg><use href="#i-compass"/></svg>操作引导</button>
+        <button class="btn" id="bClear"><svg><use href="#i-trash"/></svg>清空</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-head-icon"><svg><use href="#i-list"/></svg></div>
+        <h3>设备固件录入</h3><span class="spacer"></span>
+        <span class="meta">勾选「升级」参与合成 · 点「选择文件」载入 .bin</span></div>
+      <div class="card-body">
+        <div class="mk">
+          <div class="mk-hd"><div>设备号</div><div>版本号</div><div>源文件</div><div>信息</div><div>升级</div></div>
+          <div id="mkRows"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-head-icon"><svg><use href="#i-file"/></svg></div><h3>输出</h3>
+        <span class="spacer"></span>
+        <span class="meta">保存至浏览器下载目录</span></div>
+        <div class="card-body">
+          <!-- 「输出」压到两行：第一行 文件名 / 自动命名 / 生成，第二行结果提示。
+               目录说明搬进卡头 meta，时间标识 timeinfo 固定常量、不再暴露输入框。 -->
+          <div class="out-bar">
+            <input class="input mono" id="bFileName" placeholder="Tps_2026_1012104703.tcupd">
+            <label class="check"><input type="checkbox" id="bAutoName" checked><span>自动生成文件名</span></label>
+            <button class="btn btn-primary" id="bGen"><svg><use href="#i-box"/></svg>生成文件</button>
+          </div>
+          <div class="hint mt" id="bGenHint">勾选设备后生成 256 字节包头并拼接载荷</div>
+        </div>
+      </div>
+  </section>
+
+  <!-- ================= 设置 ================= -->
+  <section class="page" id="page-settings">
+    <div class="page-head">
+      <div>
+        <div class="page-title">设置</div>
+        <div class="page-sub">串口通信参数 · 修改后自动保存，下次打开无需重新配置</div>
+        <div class="page-tags"><span class="tag tag-r">本地记忆</span><span class="tag tag-dp">无需每次重设</span></div>
+      </div>
+      <span class="spacer"></span>
+      <button class="btn" id="sReset"><svg><use href="#i-refresh"/></svg>恢复默认</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-head-icon"><svg><use href="#i-usb"/></svg></div>
+        <h3>串口参数</h3><span class="spacer"></span><span class="meta" id="sSaved">已保存</span></div>
+      <div class="card-body">
+        <div class="set-list">
+          <div class="set-row">
+            <div class="set-lbl"><b>波特率</b><span>与设备串口速率一致</span></div>
+            <div class="set-ctl">
+              <select class="input" id="uBaud">
+                <option value="115200" selected>115200（固件默认）</option>
+                <option value="9600">9600</option><option value="19200">19200</option>
+                <option value="38400">38400</option><option value="57600">57600</option>
+                <option value="230400">230400</option>
+              </select>
+              <div class="hint">tcsd_comm.c 中固定 115200 8N1</div>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-lbl"><b>ACK 超时</b><span>每包等待应答的上限</span></div>
+            <div class="set-ctl">
+              <select class="input" id="uTimeout">
+                <option value="500">500 ms</option>
+                <option value="800">800 ms</option>
+                <option value="1500" selected>1500 ms</option>
+                <option value="3000">3000 ms</option>
+              </select>
+              <div class="hint">从机复位或忙时适当调大</div>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-lbl"><b>失败重试</b><span>超时后重发当前包</span></div>
+            <div class="set-ctl">
+              <select class="input" id="uRetry">
+                <option value="0">0</option>
+                <option value="2">2</option>
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+              </select>
+              <div class="hint">设备按包序号去重，重发上一包会被接受</div>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-lbl"><b>从站地址</b><span>协议未使用多地址寻址</span></div>
+            <div class="set-ctl">
+              <input class="input mono" readonly value="0x0000">
+              <div class="hint">固定 0x0000，应答帧原样回显</div>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-lbl"><b>复位等待</b><span>EMS 固件完成后的等待秒数</span></div>
+            <div class="set-ctl">
+              <select class="input" id="uResetWait">
+                <option value="0">0（不等待）</option>
+                <option value="3">3 秒</option>
+                <option value="5">5 秒</option>
+                <option value="10">10 秒</option>
+                <option value="15" selected>15 秒</option>
+                <option value="20">20 秒</option>
+                <option value="30">30 秒</option>
+              </select>
+              <div class="hint">设备写入完成后需要复位并重启 bootloader；只有 EMS 会等待复位并回读版本，DC / PCS / BMS 的固件由本板转发给下游从机，不等待也不校验版本</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-head-icon"><svg><use href="#i-info"/></svg></div><h3>运行环境</h3></div>
+      <div class="card-body"><div class="info-rows" id="sEnv"></div></div>
+    </div>
+  </section>
+
+  <!-- ================= 整机升级 ================= -->
+  <section class="page active" id="page-upgrade">
+    <div class="page-head">
+      <div>
+        <div class="page-title">整机升级</div>
+        <div class="page-sub">导入合成好的 .tcupd → 自动识别设备 → 逐台推送固件</div>
+        <div class="page-tags">
+          <span class="tag tag-r">自动识别</span><span class="tag tag-dp">按入口顺序</span><span class="tag tag-rw">实时进度 + 交互日志</span>
+        </div>
+      </div>
+      <span class="spacer"></span>
+      <div class="btn-row">
+        <button class="btn" id="uGuideBtn"><svg><use href="#i-compass"/></svg>操作引导</button>
+        <button class="btn btn-primary" id="uImport"><svg><use href="#i-up"/></svg>导入固件</button>
+      </div>
+    </div>
+
+    <input type="file" id="uFile" accept=".tcupd" class="vh-file">
+
+    <div class="up-body">
+      <div class="card">
+        <div class="card-head"><div class="card-head-icon"><svg><use href="#i-play"/></svg></div>
+          <h3>整机升级</h3>
+          <!-- 包信息行：默认整行隐藏。
+               未导入时写「等待导入升级包」和大标题那句一字不差，等于同一句话说两遍；
+               这里让大标题独自承担「还没开始」的说明，导入成功或解析失败后才现身。 -->
+          <span class="meta ell" id="uPkgMeta" hidden></span>
+          <span class="spacer"></span>
+          <span class="meta" id="uSlotHint">按入口序号升序推送</span></div>
+          <div class="card-body">
+        <!-- 升级进度。整机进度只有一处：右上百分比 + 下方一条粗条。
+             本台进度由分段块的填充比例表达，不再单列百分比 —— 两个分母不同的
+             百分比并排显示，用户分不清 1% 是整台还是本台。 -->
+        <div class="ux">
+          <div class="ux-top">
+            <div class="ux-l">
+              <div class="ux-tags"><span class="ux-tag" id="uCurTag">当前固件</span><span class="ux-state" id="uCurState" hidden></span></div>
+              <div class="ux-name"><span id="uCurName">—</span><span class="ux-fld" id="uCurDevBox" hidden><span class="ux-fld-k">设备号</span><span class="ux-dev" id="uCurDev"></span></span><span class="ux-fld" id="uCurVerBox" hidden><span class="ux-fld-k">版本</span><span class="ux-ver" id="uCurVer"></span></span></div>
+              <div class="ux-sub" id="uCurSub">等待导入升级包</div>
+            </div>
+            <div class="ux-r">
+              <div class="ux-pct" id="uPct"><b id="uPctNum">0</b><span>%</span></div>
+              <div class="ux-pctlbl" id="uPctLbl">整机进度</div>
+            </div>
+          </div>
+          <div class="ux-track"><div class="ux-fill" id="uFill"></div></div>
+          <div class="ux-meta">
+            <div class="ux-ml"><div class="ux-segs" id="uSegs"></div><span class="ux-ovr" id="uOverMeta"></span></div>
+            <div class="ux-mr" id="uDevMeta"></div>
+          </div>
+          <div class="ux-res" id="uResRow" hidden></div>
+          <div class="ux-next" id="uNextRow"><span class="ux-tag" id="uNextTag">下一台</span><b id="uNextDev">—</b><span id="uNextStep">—</span></div>
+        </div>
+        <div class="btn-row mt">
+          <button class="btn btn-primary btn-lg" id="uStart" disabled><svg><use href="#i-play"/></svg>开始整机升级</button>
+          <button class="btn btn-danger btn-lg" id="uAbort" disabled><svg><use href="#i-stop"/></svg>中止</button>
+          <span class="spacer"></span>
+          <label class="check"><input type="checkbox" id="uContinue" checked><span>单台失败后继续下一台</span></label>
+        </div>
+      </div>
+      </div>
+
+      <div class="card log-card" id="uLogCard">
+        <div class="card-head">
+          <div class="card-head-icon"><svg><use href="#i-terminal"/></svg></div>
+          <h3>交互日志</h3>
+          <span class="spacer"></span>
+          <label class="check"><input type="checkbox" id="uLogAuto" checked><span>自动保存</span></label>
+          <button class="btn btn-sm" id="uLogDir"><svg><use href="#i-file"/></svg><span id="uLogDirName">选择目录</span></button>
+          <button class="btn btn-sm" id="uLogPause"><svg><use href="#i-clock"/></svg>暂停滚动</button>
+          <button class="btn btn-sm" id="uLogExport"><svg><use href="#i-down"/></svg>导出</button>
+          <button class="btn btn-sm" id="uClearLog"><svg><use href="#i-trash"/></svg>清空</button></div>
+        <div class="card-body">
+          <!-- 日志会跟着 UI 语言重译（relocalizeLog），但这里把 lang 钉死在中文：
+     切语言时浏览器不必为这一万个文本节点重新跑一遍字体匹配 ——
+     重译走的是整行重画，本来就会重新排版，没必要再叠一次全量字体失效。
+     纯英文日志不含汉字，钉成 zh-CN 不影响取字。 -->
+          <div id="uLog" lang="zh-CN"></div>
+          <!-- 自动保存状态行：累计条数 + 当前写入目录，由 renderLogAutoInfo() 整段重写。 -->
+          <div class="lauto" id="uLogAutoInfo"><span class="lai"></span><span class="lat"></span></div>
+          <!-- 收发次数与总条数：日志框下方的底栏，右对齐。
+               早先浮在右下角，但那是压在日志正文上的 —— 日志滚到底时最后几行
+               正好贴在浮层底下，长 hex 行会叠在统计上，看不清也选不中。
+               底栏不遮行；高度用 .lstats 的 margin-top 8px + 胶囊自身 ~22px 换回来，
+               #uLogCard 的 min-height 也相应从 240px 提到了 270px。
+               文案不走 tr() 词典：「发送 / 接收 / 共 / 条」都是通用短词，
+               全局替换会切碎「接收超时」这类长词条，由 renderLogStats() 直接写。 -->
+          <span class="lstats" id="uLogStat">
+            <span class="lstat tx"><span class="lk">[TX]</span><span class="lw" id="uLogTxW">发送</span><b id="uLogTx">0</b></span>
+            <span class="lstat rx"><span class="lk">[RX]</span><span class="lw" id="uLogRxW">接收</span><b id="uLogRx">0</b></span>
+            <span class="lstat"><span class="lw" id="uLogSumW">共</span><b id="uLogTotal">0</b><span class="lw" id="uLogUnit"> 条</span></span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 固件解析 ================= -->
+  <section class="page" id="page-parse">
+    <div class="page-head">
+      <div>
+        <div class="page-title">固件解析</div>
+        <div class="page-sub">导入 .tcupd 升级包 → 校验包头 → 逐台清单 → 十六进制预览</div>
+        <div class="page-tags">
+          <span class="tag tag-dp">只读查看</span><span class="tag tag-r">sum16 / xor8 校验</span><span class="tag tag-rw">不访问串口</span>
+        </div>
+      </div>
+      <span class="spacer"></span>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="pImport"><svg><use href="#i-up"/></svg>导入 .tcupd</button>
+        <button class="btn" id="pClear"><svg><use href="#i-trash"/></svg>清空</button>
+      </div>
+    </div>
+
+    <input type="file" id="pFile" accept=".tcupd" class="vh-file">
+
+    <div class="card">
+      <div class="card-head"><div class="card-head-icon"><svg><use href="#i-list"/></svg></div>
+        <h3>包内清单</h3><span class="spacer"></span><span class="meta" id="pMeta">—</span></div>
+      <div class="card-body">
+        <div class="tbl-wrap"><table class="field-table" id="pTable"></table></div>
+        <div class="hint mt">仅列出 devmap 置位且 filesize 非零的入口；未启用的入口在包头中保留但不下发</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-head-icon"><svg><use href="#i-layers"/></svg></div><h3>包头参数</h3></div>
+      <div class="card-body">
+        <div class="grid grid-3" style="gap:8px">
+          <div><div class="hint">文件大小</div><input class="input mono" id="pFileSize" readonly value="—"></div>
+          <div><div class="hint">包标志</div><input class="input mono" id="pMagic" readonly value="—"></div>
+          <div><div class="hint">devmap</div><input class="input mono" id="pDevmap" readonly value="—"></div>
+          <div><div class="hint">载荷总长</div><input class="input mono" id="pTotal" readonly value="—"></div>
+          <div><div class="hint">包头校验</div><input class="input mono" id="pHdrCrc" readonly value="—"></div>
+          <div><div class="hint">时间标识</div><input class="input mono" id="pTimeinfo" readonly value="—"></div>
+        </div>
+        <div class="hint mt" id="pChecks">—</div>
+      </div>
+    </div>
+
+    <div class="card" id="pHexCard" style="display:none">
+      <div class="card-head"><div class="card-head-icon"><svg><use href="#i-terminal"/></svg></div>
+        <h3>包头预览（前 256 字节）</h3><span class="spacer"></span>
+        <span class="meta">绿=设备号 蓝=校验 黄=filesize 红=总长/包头校验 · 全 0 行已压暗</span></div>
+      <div class="card-body"><div class="hexdump" id="pHexDump"></div></div>
+    </div>
+  </section>
+
+  </main>
+</div>
+<div class="toast-wrap" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<!-- ===== 漫游式引导 ===== -->
+<!-- 遮罩用 4 块 div 拼出中间的目标洞。这 4 块**不加过渡**，由 JS 瞬时定位；
+     若加过渡，过渡帧里相邻块会对不齐，闪出一条白/灰接缝线。 -->
+<div class="tour" id="tour" hidden>
+  <div class="tour-shade" data-tour-shade="t"></div><div class="tour-shade" data-tour-shade="b"></div>
+  <div class="tour-shade" data-tour-shade="l"></div><div class="tour-shade" data-tour-shade="r"></div><div class="tour-ring" id="tourRing"></div>
+  <div class="tour-pop" id="tourPop" role="dialog" aria-live="polite">
+    <div class="tour-pop-hd">
+      <span class="tour-idx" id="tourIdx">1/6</span>
+      <span class="tour-title" id="tourTitle"></span>
+    </div>
+    <div class="tour-body" id="tourBody"></div>
+    <div class="tour-foot">
+      <button class="btn btn-sm" id="tourSkip">跳过</button>
+      <span class="spacer"></span>
+      <button class="btn btn-sm" id="tourPrev">上一步</button>
+      <button class="btn btn-sm btn-primary" id="tourNext">下一步</button>
+    </div>
+    <div class="tour-dots" id="tourDots"></div>
+  </div>
+</div>
+<!-- 从站地址：固件固定回显 0x0000，升级全程原样写入帧头 addr 字段 -->
+<input type="hidden" id="uAddr" value="0000">
+
+<script>
+"use strict";
+/* =========================================================
+   SkyTimes 升级工具 — 应用逻辑
+   ========================================================= */
+const $  = (s,r=document)=>r.querySelector(s);
+const $$ = (s,r=document)=>Array.from(r.querySelectorAll(s));
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const hx=(n,w=2)=>(n>>>0).toString(16).toUpperCase().padStart(w,'0');
+const hx2=(n,w=4)=>(n>>>0).toString(16).toUpperCase().padStart(w,'0');
+const fmtSize=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(2)+' MB';
+/* 日志专用的紧凑体积：结构化日志按空格切词，值里带空格会切不成键值对。 */
+const fmtSizeLog=b=>fmtSize(b).replace(' ','');
+/* 日志时间戳：[年-月-日 时:分:秒.毫秒]，便于事后与串口抓包对齐。
+   毫秒不是锦上添花：115200bps 下一个包约 11ms，一轮升级三千多行，
+   只到秒的话整轮时间轴全糊在同一格里，根本看不出包与包之间的间隔。 */
+const nowStr=()=>{const d=new Date(),p=(n,w=2)=>String(n).padStart(w,'0');
+  return `[${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(),3)}]`;};
+const printable=b=>(b>=32&&b<127)?String.fromCharCode(b):'.';
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* =========================================================
+   国际化
+   ------------------------------------------------------------
+   词典以「中文原文」为键，英文为值。两条通路：
+     1) tr()   —— 运行期生成的文案（日志 / Toast / 进度）在写入 DOM 前翻译；
+     2) 静态扫描 —— 首屏 HTML 里的文案按文本节点整体匹配替换。
+   静态节点首次扫描时把中文原文存进 __zh，切回中文时再拿它还原，
+   因此 en ↔ zh 来回切换是幂等的。
+   动态区域（#mkRows / #pTable / #uLog 等）不参与静态扫描，
+   改语言时统一走 renderXxx() 重画。
+   ========================================================= */
+const I18N={
+/* ---------- 导航 / 顶栏 ---------- */
+'固件制作':'Firmware Builder',
+/* 品牌副标题只有约 118px 可用宽（192 侧栏 − 图标/间距/内边距），
+   英文必须短，否则会被 ellipsis 截断。 */
+'固件升级工具':'Upgrade Tool',
+'SkyTimes 升级工具':'SkyTimes Upgrade Tool',
+'整机升级':'Device Upgrade',
+'设置':'Settings',
+'收起侧栏':'Collapse Sidebar',
+'串口状态':'Serial Status',
+'切换主题':'Toggle Theme',
+'切换语言':'Switch Language',
+'未连接':'Disconnected',
+'已连接':'Connected',
+'连接':'Connect',
+'断开':'Disconnect',
+
+/* ---------- 设备名（贯穿日志、清单、表格） ---------- */
+
+'扩展设备':'Expansion Device',
+'扩展设备3':'Expansion Device 3',
+'扩展设备4':'Expansion Device 4',
+'扩展设备5':'Expansion Device 5',
+
+/* ---------- 通用词 ---------- */
+'包头校验':'Header Check',
+'包头 256 B':'Header 256 B',
+'包内清单':'Package Contents',
+'固件包信息':'Firmware Package',
+'入口顺序':'Entry order',
+'版本':'Version',
+'目标版本':'Target Version',
+
+'版本校验':'Version Check',
+'已确认':'confirmed',
+'未回读':'not read back',
+'（未确认）':' (unconfirmed)',
+'产品型号':'Product Model',
+'无应答':'no reply',
+'跳过本台版本校验':'skip this device’s version check',
+'版本应答长度异常':'unexpected version reply length',
+'设备未回报 ':'Device did not report ',
+
+'版本校验失败：包内 ':'Version check failed: package ',
+'，设备回报 ':', device reports ',
+'版本已确认':'version confirmed',
+'回读版本无应答':'no reply while reading back the version',
+
+'复位后校验版本':'verify version after reset',
+'剩余 ':' remaining ',
+'等待 ':'Wait ',
+' s 后回读 ':' s, then reading back ',
+' s 供设备复位':' s for the device to reset',
+'不校验':'not checked',
+'回读版本中…':'reading version…',
+
+'版本校验：':'Version check: ',
+'台已确认版本变更':' devices confirmed the new version',
+/* 以下六条必须比它们各自包含的短词更长，tr() 才会先命中长键。
+   少了长度约束就会出现「校验中」被译成 "Check中」、「写入完成」译成 "写入Done"。 */
+' 台已确认':' units confirmed',
+'校验中':'Checking',
+'下发中':'Sending',
+'传输中':'Transferring',
+'等待中':'Waiting',
+'写入完成':'Written',
+'待开始':'Ready',
+'升级进行中，不能导入升级包':'An upgrade is running — the package cannot be imported now',
+'待升级 ':'To upgrade ',
+'包内没有可升级的固件':'No upgradeable firmware in this package',
+'固件已写入本板 flash，转发由设备负责':'Firmware is in this board’s flash; forwarding it downstream is up to the device',
+'回读中':'Reading back',
+'已跳过':'Skipped',
+'已中断':'Interrupted',
+'当前固件':'Current Firmware',
+'逐台结果与版本对照见下方交互日志':'Per-unit results and version comparison are in the log below',
+'导入后这里会显示正在刷哪一版固件':'The firmware being flashed shows up here after the import',
+'（其余未回读到有效版本，不计入失败）':' (the rest returned no valid version and are not counted as failures)',
+'每台完成后等待 ':'After each device it waits ',
+' s 供设备复位（仅 EMS 需要，其余三类不等待），可在「设置」页调整':' s for the device to reset (only the EMS needs this); adjustable in Settings',
+'总校验':'Total checksum',
+'跳过总校验':'Skipping checksum',
+' 固件已下载到本板 flash，下游从机由本板负责转发，跳过 CRC 总校验':' firmware is now in this board’s flash; the downstream slaves are fed by this board, so the CRC check is skipped',
+'校验失败':'checksum FAILED',
+'包内没有可升级的固件，请确认 devmap 与 filesize':'No upgradeable firmware in the package; check devmap and filesize',
+'当前没有已导入的解析结果':'No parsed package loaded',
+'已清空解析结果':'Parsed package cleared',
+'地址':'Addr',
+'个设备':' devices ·',
+
+
+
+'单台失败后继续下一台':'Continue to next device after a failure',
+'按入口序号升序推送':'Push in ascending entry order',
+'按入口顺序：':'Entry order: ',
+'包内没有待升级设备':'No devices to upgrade in this package',
+'等待导入升级包':'Waiting for a package to import',
+
+'设备固件录入':'Device Firmware Entry',
+'整机升级开始':'Whole-device upgrade started',
+'整机升级结束':'Whole-device upgrade finished',
+'整机升级中断':'Upgrade interrupted',
+'整机升级成功':'Upgrade succeeded',
+'交互日志':'Interaction Log',
+'运行环境':'Environment',
+'串口参数':'Serial Parameters',
+
+
+
+'按入口顺序':'By entry order',
+'自动识别':'Auto-detect',
+'实时进度 + 交互日志':'Live progress + interaction log',
+'devmap 自动生成':'devmap auto-generated',
+'自动 sum16 / xor8':'Auto sum16 / xor8',
+'Tps_日期.tcupd':'Tps_date.tcupd',
+
+/* ---------- 制作页 ---------- */
+'按设备录入 设备号 / 版本号 / 源文件，勾选后合成 .tcupd':'Enter device No. / version / source file per device, then tick to build a .tcupd',
+'导入 .tcupd':'Import .tcupd',
+'清空':'Clear',
+'勾选「升级」参与合成 · 点「选择文件」载入 .bin':'Tick "Upgrade" to include · pick a .bin with Choose File',
+'设备号':'Device No.',
+'版本号':'Version',
+'请先补全':'Please fill in',
+'[fail] 已阻止生成：':'[fail] Build blocked: ',
+' 未填写':' is empty',
+'源文件':'Source File',
+'升级':'Upgrade',
+'输出':'Output',
+'保存至浏览器下载目录':'Saved to the browser download folder',
+'自动生成文件名':'Auto-generate file name',
+/* 「生成文件」的英文词条在制作页引导段落里已登记（Generate File），此处不重复：
+   对象字面量里后写的会覆盖先写的，两处都写只会导致改一处漏一处。 */
+
+
+'勾选设备后生成 256 字节包头并拼接载荷':'Tick a device to build a 256-byte header and append the payload',
+'包头参数':'Header Fields',
+
+'包头预览（前 256 字节）':'Header Preview (first 256 bytes)',
+'绿=设备号 蓝=校验 黄=filesize 红=总长/包头校验':'Green=device no.  Blue=flags  Yellow=filesize  Red=total/header CRC',
+'4 字节':'4 bytes',
+'未选择源文件':'No source file chosen',
+'选择文件':'Choose File',
+'可改 0–7':'editable 0–7',
+'已清空':'Cleared',
+
+'包数':'Packs',
+
+'载荷区间':'Payload Range',
+'设备':'Device',
+'入口':'Entry',
+
+/* ---------- 设置页 ---------- */
+'串口通信参数 · 修改后自动保存，下次打开无需重新配置':'Serial parameters · saved automatically, no reconfiguration needed next time',
+'本地记忆':'Remembered locally',
+'无需每次重设':'No need to reset each time',
+'恢复默认':'Restore Defaults',
+'已保存':'Saved',
+'波特率':'Baud Rate',
+'与设备串口速率一致':'Must match the device serial rate',
+'115200（固件默认）':'115200 (firmware default)',
+'中固定 ':' fixed at ',
+'协议':'Protocol',
+'存储':'Storage',
+'工具版本':'Tool Version',
+' 秒':' s',
+'ACK 超时':'ACK Timeout',
+'每包等待应答的上限':'Upper bound for each packet reply',
+'从机复位或忙时适当调大':'Increase when the slave is resetting or busy',
+'失败重试':'Retries',
+'超时后重发当前包':'Resend the current packet after a timeout',
+'设备按包序号去重，重发上一包会被接受':'The device de-duplicates by packet index, so resending the previous packet is accepted',
+'从站地址':'Slave Address',
+'协议未使用多地址寻址':'The protocol does not use multi-addressing',
+'固定 0x0000，应答帧原样回显':'Fixed 0x0000, echoed verbatim in the reply frame',
+'复位等待':'Reset Wait',
+'EMS 固件完成后的等待秒数':'Seconds to wait after the EMS firmware finishes',
+'0（不等待）':'0 (no wait)',
+'设备写入完成后需要复位并重启 bootloader；只有 EMS 会等待复位并回读版本，DC / PCS / BMS 的固件由本板转发给下游从机，不等待也不校验版本':'After writing, the device resets and restarts the bootloader. Only the EMS waits for that and reads its version back; DC / PCS / BMS firmware is forwarded to the downstream slaves by the board itself, with no wait and no version check',
+'[success] 可用':'[success] available',
+'[fail] 不可用（需 Chrome / Edge 89+）':'[fail] unavailable (needs Chrome / Edge 89+)',
+'8N1 · 无流控 · 从站地址 0x0000':'8N1 · no flow control · slave address 0x0000',
+'TCSD · AA AA + 地址 + 命令码 + 长度 + 数据域 + 校验':'TCSD · AA AA + addr + cmd + len + data + checksum',
+'参数保存在浏览器 localStorage':'Parameters are stored in browser localStorage',
+'v1.0 · 单文件 HTML':'v1.0 · single-file HTML',
+'已恢复默认':'Defaults restored',
+'已恢复默认参数':'Default parameters restored',
+
+/* ---------- 日志结构化字段词条 ----------
+   这些键都必须是单 token（英文侧不带空格），否则结构化行会被切碎。
+   新增前务必确认同名词条已存在：重复键会让后一条静默覆盖前一条。
+   另外「设备」这类通用词要格外小心 —— 它会出现在很多散文里，一不小心
+   就把「本轮 4 台设备」译成「4 台 dev」。下面每条都在 tr() 上实测过。 */
+'设备数':'devices',
+'合计':'total',
+'文件':'file',
+'期望':'expected',
+'实际':'actual',
+'结果':'result',
+'载荷':'payload',
+'字节':'bytes',
+'耗时':'elapsed',
+'通过':'pass',
+'百分比':'percent',
+'原因':'reason',
+'部分成功':'partly_ok',
+'进度':'progress',
+'明细':'details',
+'包内容':'package_content',
+'包校验':'package_check',
+'推送顺序':'push_order',
+'参数下发':'send_params',
+'传输进度':'transfer_progress',
+'版本比对':'version_compare',
+'设备升级开始':'device_start',
+'数据传输完成':'transfer_done',
+'固件已写入':'flash_written',
+'设备升级完成':'device_done',
+'设备升级失败':'device_failed',
+'设备信息':'device_info',
+'前面板':'front_panel',
+'槽位版本':'slot_versions',
+'系列':'series',
+'CRC总校验':'crc_total',
+'大小':'size',
+'总长校验':'total_check',
+'入口信息':'entry_info',
+'硬件':'hw',
+'软件':'sw',
+'型号':'model',
+'导入完成':'imported',
+'序号':'idx',
+'串口连接':'serial_open',
+'数据位':'data',
+'停止位':'stop',
+'校验位':'parity',
+'工具就绪':'ready',
+'工具':'tool',
+'环境检查':'env_check',
+'用户中止':'user_abort',
+'串口断开':'serial_closed',
+'设备或线缆已移除':'device or cable removed',
+'用户点了中止按钮':'the user pressed Abort',
+/* ---------- 升级页 ---------- */
+'导入合成好的 .tcupd → 自动识别设备 → 逐台推送固件':'Import a built .tcupd → auto-detect devices → push firmware one by one',
+'导入固件':'Import Firmware',
+'操作引导':'Guided Tour',
+'跳过':'Skip',
+'上一步':'Previous',
+'下一步':'Next',
+'完成':'Done',
+'连接串口':'Connect Serial',
+'导入升级包':'Import Package',
+'确认包信息':'Check Package',
+'失败策略':'Failure Policy',
+/* 「开始整机升级」「交互日志」已在升级页词条里登记过，此处不再重复定义：
+   对象字面量里后写的会覆盖先写的，重复登记只会让两个词条各改一处而漏掉另一处。 */
+'在设备列表里挑对应的那个口（注意看括号里的 COM 号）。浏览器不会把 COM 号告诉网页，所以顶栏只显示已连接与波特率 —— 选哪个口要靠你自己认。':'Pick the matching entry from the device list (note the COM number in parentheses). The browser never exposes the COM number to the page, so the top bar only shows the connection state and baud rate — picking the right port is on you.',
+'选择固件制作页生成的 <code>.tcupd</code>。导入后卡片标题栏会显示台数、大小与包头校验结果。':'Choose the .tcupd produced by the Builder page. After import the card header shows the device count, size and header check.',
+'这里核对包内设备台数与包头校验。校验不通过时不要开始升级，否则设备会拒绝写入。':'Verify the device count and header check here. Do not start an upgrade while the check fails — the device will refuse the write.',
+'勾选后，某一台失败不会中断整轮，继续推送下一台；不勾选则第一台失败即中止。':'When ticked, one device failing does not abort the run — the next device is pushed. When unticked, the first failure stops everything.',
+'按包内入口序号升序逐台推送。过程中可随时「中止」；每台写完后设备会复位重启 bootloader，工具按「设置」里的复位等待时间留出间隔。':'Devices are pushed one by one in ascending entry order. You can abort at any time; after each device the tool waits out the reset delay from Settings while the device reboots into its bootloader.',
+'逐帧记录收发数据与每台设备的处理结果，可暂停滚动或导出为 txt。勾选「自动保存」后每满 2000 条自动写入所选目录的 logs 子文件夹并清空当前日志。升级出问题先看这里。':'Every frame sent and received, plus each device result, is recorded here. Pause or export it as txt. With "Auto-save" ticked, every 2000 entries are written into the logs sub-folder of the chosen folder and the on-screen log is cleared. Check this first when an upgrade misbehaves.',
+'整机进度':'Overall',
+'当前':'Current',
+'下一台':'Next',
+'开始整机升级':'Start Upgrade',
+'中止':'Abort',
+'条':' entries',
+'0 条':'0 entries',
+
+'暂停滚动':'Pause Scroll',
+'继续滚动':'Resume Scroll',
+'导出':'Export',
+
+/* ---------- 固件制作页引导 ---------- */
+'按设备录入':'Enter per Device',
+'每行是一块板子：填设备号、版本号，选好 <code>.bin</code> 源文件，再勾上「升级」表示这行参与合成。没有源文件的行不会被写进升级包。':'Each row is one board: fill in the device number and version, pick its .bin source file, then tick "Upgrade" to include it. Rows without a source file are not written into the package.',
+'设备号与版本号':'Device No. & Version',
+'设备号必须与实物一致，空着会被写成 00 00 00 00，设备不认。版本号只填数字：112 就是 112，不要写成 1.12。':'The device number must match the hardware; left empty it is written as 00 00 00 00 and the device will not accept it. Enter the version as plain digits: 112 means 112, not 1.12.',
+'选源文件':'Pick Source File',
+'点「选择文件」载入 <code>.bin</code>。载入后这格会显示包数与 sum16 校验，超出大小限制会标红。':'Click "Choose File" to load a .bin. Once loaded the cell shows the packet count and the sum16 check; an oversized file is flagged in red.',
+'入口序号':'Entry Index',
+'决定推固件时的先后顺序。双击这格可改序号（0–7）；实测厂商包为 DC=0、PCS=1、EMS=6、BMS=7，与实际不符时在此修正。':'This decides the order firmware is pushed in. Double-click the cell to change it (0–7). Measured vendor packages use DC=0, PCS=1, EMS=6, BMS=7 — correct it here if yours differ.',
+'输出文件名':'Output File Name',
+'默认按 Tps_日期时间 命名，名字可以随意修改；想恢复自动名就取消勾选后再勾上。文件保存到浏览器下载目录。':'Named automatically as Tps_<date-time>; edit the name freely, and untick then re-tick the box to regenerate it. The file is saved to the browser download directory.',
+'生成文件':'Generate File',
+'勾选行、填好字段后生成 <code>.tcupd</code>：256 字节包头 + 各设备载荷，按设备号去重。下方提示行会告诉你还缺什么。':'With rows ticked and fields filled, this builds the .tcupd: a 256-byte header plus each device payload, de-duplicated by device number. The hint line below tells you what is still missing.',
+
+/* ---------- 串口 / 协议 ---------- */
+'串口已连接':'Serial connected',
+'串口已断开':'Serial disconnected',
+'串口未连接':'Serial not connected',
+'已断开':'Disconnected',
+'已中止':'Aborted',
+'连接失败':'Connect failed',
+'当前浏览器不支持 Web Serial，请使用 Chrome / Edge':'This browser does not support Web Serial, please use Chrome / Edge',
+
+'用户中止升级':'User aborted the upgrade',
+'等待应答超时':'Timed out waiting for a reply',
+'通信失败':'Communication failed',
+'该入口没有已知升级命令字，已跳过':'No known upgrade command for this entry, skipped',
+
+
+/* ---------- 解析 / 导入 ---------- */
+'文件过小，不是有效的 .tcupd 包':'File is too small to be a valid .tcupd package',
+
+
+'入口序号重复':'Duplicate entry index',
+'入口序号需为 0–7':'Entry index must be 0–7',
+'解析失败':'Parse failed',
+'超出大小限制':'exceeds the size limit',
+
+'尚未连接串口，请点右上角「连接」；波特率等参数可在「设置」页调整':'Serial not connected yet — click "Connect" at the top right; baud rate etc. are on the Settings page',
+'请先导入 .tcupd 升级包':'Import a .tcupd package first',
+'日志为空，无可导出内容':'Log is empty, nothing to export',
+'已导出':'Exported ',
+' 条日志':' log entries',
+'SkyTimes_升级日志_':'SkyTimes_UpgradeLog_',
+'# SkyTimes 升级工具 · 交互日志':'# SkyTimes Upgrade Tool · Interaction Log',
+'# 导出时间：':'# Exported at: ',
+'# 共 ':'# Total ',
+' 条\r\n\r\n':' entries\r\n\r\n',
+'已识别':'Recognized ',
+' 台待升级设备':' devices to upgrade',
+'已载入':'Loaded ',
+'，但 ':', but ',
+
+/* ---------- 日志自动保存 ---------- */
+'自动保存':'Auto-save',
+'选择目录':'Pick folder',
+'logs 文件夹':'logs folder',
+'自动保存：':'Auto-save: ',
+' 条（满额自动落盘）':' entries (saved automatically when full)',
+'自动保存已关闭，日志只保留在界面中':'Auto-save is off; the log stays on screen only',
+'日志目录':'Log folder',
+'正在保存…':'saving…',
+'目录未选择，自动保存将改用浏览器下载目录':'no folder picked — auto-save falls back to the browser download folder',
+'点击「选择目录」指定自动保存位置（与固件导出同一目录，文件写入其 logs 子文件夹）':'Click "Pick folder" to choose where auto-save writes (same folder as the firmware export; files go into its logs sub-folder)',
+'自动保存已开启，每 2000 条写入 logs 文件夹并清空当前日志':'Auto-save is on: every 2000 entries are written to the logs folder and the on-screen log is cleared',
+'自动保存已关闭':'Auto-save is off',
+'已自动保存':'Auto-saved ',
+' 条日志到 ':' log entries to ',
+' 条日志（浏览器下载目录）':' log entries (browser download folder)',
+'/logs/':'/logs/',
+'当前浏览器不支持写入指定目录（需 Chrome / Edge），自动保存将改用浏览器下载目录':'This browser cannot write to a chosen folder (needs Chrome / Edge); auto-save falls back to the browser download folder',
+'自动保存失败，已保留当前日志并关闭自动保存':'Auto-save failed; the log was kept and auto-save turned off',
+'选择目录失败':'Could not use that folder',
+'已取消目录选择':'Folder selection cancelled',
+'自动保存已开启，点日志栏「选择目录」指定位置，日志将写入该目录的 logs 子文件夹':'Auto-save is on — click "Pick folder" in the log bar to set the location; logs are written to its logs sub-folder',
+
+
+
+/* ---------- 升级流程日志 ---------- */
+'校验设备号':'Checking device No.',
+'设备号校验':'Device No. check',
+'下发参数':'Sending parameters',
+'包数下发':'Packet count',
+'长度下发':'Length',
+
+'准备中':'Preparing',
+'等待开始':'Waiting to start',
+'（无）':'(none)',
+'最后一台':'Last device',
+'全部结束':'All done',
+'即将开始':'Starting shortly',
+
+'升级完成':'Upgrade complete',
+'部分失败':'Partially failed',
+'分 ':'min ',
+' 分':' min',
+'失败':'Failed',
+'升级失败':'Upgrade failed',
+
+'本台完成后开始':'Starts after this device',
+'每台完成后等待':'Wait ',
+
+'升级过程中请勿断电或拔线':'Do not power off or unplug during the upgrade',
+'用时':'Elapsed',
+'平均速率':'Average rate',
+
+'完成，':'Done, ',
+' 台失败':' devices failed',
+'设备号校验通过':'Device No. verified',
+
+'长度校验':'Length check',
+
+
+
+
+
+
+'无应答，重试':' no reply, retrying',
+'本台失败，跳过等待':'This device failed, skipping the wait',
+'已按设置跳过，继续升级下一台':'Skipped as configured, continuing to the next device',
+'第 ':'No. ',
+' 包应答':' packet reply',
+'次无应答，重试…':' had no reply, retrying…',
+' 台设备':' devices',
+' 台':' units',
+
+
+/* ---------- 升级进度描述 ---------- */
+'整机剩余约':'total remaining about ',
+'本台剩余':'This device left',
+'本台':'This device',
+'速率':'Rate',
+'已发送':'Sent',
+'传输 ':'Sending ',
+' 包　':' packs  ',
+' s':' s',
+
+/* ---------- 串口日志 ---------- */
+'串口已连接 @':'Serial connected @',
+' bps':' bps',
+'环境检查：Web Serial 可用':'Environment check: Web Serial available',
+'已就绪':' ready',
+'SkyTimes 升级工具 已就绪':'SkyTimes Upgrade Tool ready',
+'当前浏览器不支持 Web Serial，串口升级不可用；打包与解析不受影响':'This browser does not support Web Serial, so serial upgrade is unavailable; building and parsing still work',
+'当前浏览器不支持 Web Serial API。':'This browser does not support the Web Serial API.',
+'固件制作不受影响；整机升级请使用':'Building is unaffected; for device upgrade please use ',
+'超出该设备上限':' exceeds this device limit',
+'，设备会返回':'; the device will return ',
+
+/* ---------- 解析页 ---------- */
+'固件解析':'Package Inspector',
+'导入 .tcupd 升级包 → 校验包头 → 逐台清单 → 十六进制预览':'Import a .tcupd package → verify the header → per-device list → hex preview',
+'只读查看':'Read-only',
+'不访问串口':'No serial access',
+' 解析通过':' parsed OK',
+'，但有校验项未通过':', but some checks failed',
+'导入后显示':'Import a package to see the list',
+'总长一致':'Total length',
+'载荷长度':'Payload length',
+'校验':'Check',
+'有 ':'',
+'台数据校验失败':' device(s) failed the data check',
+'文件大小':'File Size',
+'包标志':'Magic',
+'载荷总长':'Payload Size',
+'时间标识':'Time Tag',
+'仅列出 devmap 置位且 filesize 非零的入口；未启用的入口在包头中保留但不下发':'Only entries with the devmap bit set and a non-zero filesize are listed; disabled entries stay in the header but are never pushed',
+
+/* ---------- 补漏：审计 tr() 后仍残留中文的片段 ----------
+   动态文案带 ${...} 插值，永远匹配不到整句键；靠「长键优先子串替换」
+   逐段命中静态片段，所以这里补的是片段而非整句。
+   注意：新键不得成为既有长键的公共前缀被提前吃掉——靠排序长度自动规避。 */
+
+/* UP_ERR 错误码释义 */
+'UP_ERR_NO 无错误':'UP_ERR_NO no error',
+'UP_ERR_CMD 命令错误':'UP_ERR_CMD bad command',
+'UP_ERR_DEV 设备号错误':'UP_ERR_DEV bad device no.',
+'UP_ERR_ALL_PACK 总包数错误':'UP_ERR_ALL_PACK bad pack count',
+'UP_ERR_ALL_SIZE 总字节数错误':'UP_ERR_ALL_SIZE bad total size',
+'UP_ERR_ALL_CHECK 总校验错误':'UP_ERR_ALL_CHECK bad final checksum',
+'UP_ERR_PACK_NUM 包序号错误':'UP_ERR_PACK_NUM bad pack sequence',
+'UP_ERR_TIMEOUT 接收超时错误':'UP_ERR_TIMEOUT receive timeout',
+'UP_ERR_FLASH flash操作错误':'UP_ERR_FLASH flash error',
+
+/* 槽位副标题（制作页 / 解析页设备名后缀） */
+'DC 充电板 · dcBoard_dev':'DC charge board · dcBoard_dev',
+'PCS 逆变板 · inverter_dev':'PCS inverter · inverter_dev',
+'EMS 主控 · mainBoard_dev':'EMS main board · mainBoard_dev',
+'BMS 从控 · bms_dev':'BMS slave · bms_dev',
+
+/* 升级主流程日志 */
+'数据传输完成：':'Data transfer complete: ',
+'CRC 一致':'CRC match',
+'，设备即将复位':', the device will reset',
+'设备上报升级状态：':'Device reports upgrade status: ',
+'升级标志=':'upgrade flag=',
+'设备上报升级失败（':'Device reported upgrade failure (',
+'未收到设备状态上报（设备已复位），按 CRC 一致判定为成功':'No status report received (the device has reset); a matching CRC is taken as success',
+'等待设备上报升级状态…':'Waiting for the device to report upgrade status…',
+'校验通过':'verified',
+'解析完成':'parse finished',
+'还没有源文件，请先「选择文件」':'has no source file yet; pick one first',
+'设备返回错误':'device returned an error',
+' 应答 ack=':' reply ack=',
+'，非 0':', not 0',
+' s 复位':' s reset',
+'固件 ':'Firmware ',
+'升级中断：':'Upgrade interrupted: ',
+'尚未勾选任何带固件的设备':'No device with firmware is ticked yet',
+'跳过噪声字节':'Skipped noise bytes',
+' 个':' noise byte(s)',
+'已生成':'Generated ',
+'本台完成后等待':'Wait after this device: ',
+'台设备｜合计':' devices, total ',
+
+/* 零散提示与报错 */
+'包头标志错误：期望 "TCBIN"，实际 "':'Bad header magic: expected "TCBIN", got "',
+'包号':'pkt',
+'浏览器不支持 Web Serial API（需 Chrome/Edge 89+）':'Web Serial API is not supported (needs Chrome/Edge 89+)',
+' 校验错':' checksum error',
+/* ---------- Toast 标签 ---------- */
+'成功':'Success',
+'错误':'Error',
+'警告':'Warning',
+'信息':'Info',
+};
+
+/* 长键优先替换：否则「已连接」会先被「连接」切碎。 */
+const TR_KEYS=Object.keys(I18N).sort((a,b)=>b.length-a.length);
+let LANG='zh';
+/* 词典里凡是「译文≠键」的条目都含中文，纯 ASCII 串一条都命中不了：
+   日志正文里的 [TX]/[RX] 帧、hex、JSON、纯数字键值全是 ASCII，而每写一行日志
+   要调用 tr() 5~10 次，一轮整机升级就是几万次。先用一次正则测试短路掉。
+   TR_SKIP_OK 是自检：日后若加进「纯 ASCII 键 + 不同译文」，短路自动失效，
+   宁可慢也不漏译。当前词典里仅有的两条 ASCII 键是 ' s':' s'、' bps':' bps'，
+   译文与键完全相同，短路与否输出一致。 */
+const CJK_RE=/[\u4e00-\u9fff]/;
+const TR_SKIP_OK=!Object.keys(I18N).some(k=>!CJK_RE.test(k)&&I18N[k]!==k);
+function tr(s){
+  if(LANG==='zh'||s==null) return s;
+  let out=String(s);
+  if(TR_SKIP_OK&&!CJK_RE.test(out)) return out;
+  for(const k of TR_KEYS){ if(out.indexOf(k)>=0) out=out.split(k).join(I18N[k]); }
+  return out;
+}
+
+/* 这些节点由 renderXxx() 重画，不参与静态扫描：包内清单/表格/环境表整体重画，
+   Toast 是历史记录（写入时定稿），日志则由 relocalizeLog() 逐行重画 ——
+   它不能走 sweepStatic：扫描是纯文本替换，会把日志行的分段 span 结构打散，
+   而 renderLogBody 从 __zh 重来一遍既保住结构又只碰含汉字的行。 */
+const I18N_SKIP='#mkRows,#pTable,#uLog,#sEnv,#uResRow,#toasts,#tour,#uLogStat,#uLogDirName,#uLogAutoInfo';
+/* 走法不用 TreeWalker：它对 SHOW_TEXT 只能逐节点判断，没法在元素层剪枝，
+   日志区两万多个文本节点会一个不落地走完，每步还要 closest() 查一次祖先（实测 269 ms）。
+   改成自己递归，在元素这一层遇到 I18N_SKIP 就整棵子树跳过 ——
+   日志区只需一次 Set 查询就绕过去，切语言的成本与日志行数脱钩。 */
+function sweepStatic(){
+  const skip=new Set(Array.from(document.querySelectorAll(I18N_SKIP)));
+  const list=[];
+  (function walk(node){
+    for(let c=node.firstChild;c;c=c.nextSibling){
+      if(c.nodeType===3){ if(c.nodeValue&&c.nodeValue.trim()) list.push(c); }
+      else if(c.nodeType===1&&!skip.has(c)) walk(c);
+    }})(document.body);
+  for(const n of list){
+    if(n.__zh===undefined) n.__zh=n.nodeValue;      /* 首次见到就存下中文原文 */
+    n.nodeValue=tr(n.__zh);
+  }
+  $$('[placeholder],[title]').forEach(el=>{
+    if(el.closest(I18N_SKIP)) return;
+    for(const a of ['placeholder','title']){
+      if(!el.hasAttribute(a)) continue;
+      const k='__zh'+a;
+      if(el[k]===undefined) el[k]=el.getAttribute(a);
+      el.setAttribute(a,tr(el[k]));
+    }
+  });
+}
+/* 进度数据行：保留原始键值，切语言时按 __raw 重画，避免打散 <b> 结构 */
+/* 日志底部的收发统计：单独渲染，不进 tr() 词典。
+   「发送」「接收」是两个通用短词，词典里还有 UP_ERR_TIMEOUT 接收超时 等长词条，
+   走全局替换会把那些长句切碎；所以这里按节点直接写死中英文。
+   TX / RX 次数靠 logTo 写入时累加（LOGSTAT），不回头扫日志树 ——
+   一轮整机升级三千多行，每次写日志都重扫一遍纯属白烧。 */
+let LOGSTAT={tx:0,rx:0};
+function renderLogStats(){
+  const tx=$('#uLogTx'); if(!tx) return;
+  const en=LANG==='en';
+  $('#uLogTxW').textContent  =en?'send':'发送';
+  $('#uLogRxW').textContent  =en?'receive':'接收';
+  $('#uLogSumW').textContent =en?'total':'共';
+  $('#uLogUnit').textContent =en?' entries':' 条';
+  tx.textContent=LOGSTAT.tx;
+  $('#uLogRx').textContent=LOGSTAT.rx;
+  $('#uLogTotal').textContent=$('#uLog').children.length;
+  /* 自动保存状态行跟着一起重画：它显示的就是本批累计条数，
+     与统计同一帧刷新，省掉一次独立的重排。 */
+  renderLogAutoInfo();
+}
+/* 直接写文本并记住原文，供切换语言时还原 */
+function setT(sel,str){
+  const el=$(sel); if(!el) return;
+  el.__raw=str; el.textContent=tr(str);
+}
+/* 切语言时把交互日志一起重译 —— 日志跟着 UI 语言走，不再按写入时的语言定稿。
+   每行的 .m 节点都留着 __zh（写入时的中文原文）和 __kind，
+   重画时一律从 __zh 重新渲染，**绝不**拿当前已译好的文本再译一次：
+   tr() 是全串全局替换，二次调用会把译文里残留的中文词条也换掉，切几次就花成乱码。
+   导出另走一条路，见 exportLog —— 导出恒为中文，与界面语言无关。
+
+   纯 ASCII 的行整行跳过。日志正文里绝大多数是 [TX]/[RX] 帧、hex、CRC 和纯数字键值，
+   一个汉字都没有；tr() 自带的 CJK 短路（配合 TR_SKIP_OK 自检：词典里不存在
+   「纯 ASCII 键 + 不同译文」）保证这类字符串两种语言渲染完全相同。
+   一千多行里通常只有几十行含中文，重画量因此降一个数量级。 */
+function relocalizeLog(){
+  const lines=$('#uLog').children;
+  let touched=0;
+  for(let i=0;i<lines.length;i++){
+    const m=lines[i].children[1];
+    if(!m||m.__zh===undefined||!CJK_RE.test(m.__zh)) continue;
+    renderLogBody(m,m.__zh,m.__kind);
+    touched++;
+  }
+  /* 行高会随译文长度变（中英宽度不同），钉在底部时补一次滚动，
+     否则最后几行可能差几像素没贴住底。 */
+  if(touched&&logAutoScroll) scheduleAutoScroll($('#uLog'));
+}
+function applyLang(lang){
+  LANG=(lang==='en')?'en':'zh';
+  document.documentElement.lang=LANG==='zh'?'zh-CN':'en';
+  document.title=tr('SkyTimes 升级工具');
+  try{ localStorage.setItem('skytimes-lang',LANG); }catch(e){}
+  const b=$('#langBtn'); if(b) b.textContent=LANG==='zh'?'EN':'中';
+  sweepStatic();
+  renderRes();
+  renderLogStats();
+  /* 上次运行留下的进度文案：拿__raw 重来一遍。
+     这里必须用 $$ —— $ 是 querySelector，只返回一个元素，元素上没有 forEach。
+     写成 $ 会在这行抛 TypeError，把整个 applyLang 从这里截断：
+     后面的 tourRender 和动态区域重画（含日志重译）全都不会执行。
+     之所以一直没暴露，是下面那个 catch 是空的，异常被静默吞掉了。 */
+  $$('#uPkgMeta,#uSlotHint,#uCurName,#uCurSub,#uOverMeta,#uDevMeta,#uNextDev,#uNextStep,#bGenHint,#connText')
+    .forEach(el=>{ if(el.__raw!==undefined) el.textContent=tr(el.__raw); });
+  /* 引导气泡是运行期拼的（含 <code>），不走静态扫描，单独重画一次；
+     已隐藏时不重画，省掉一次无意义的 DOM 写。 */
+  if(!$('#tour').hidden&&tourI>=0) tourRender();
+  /* 动态区域整体重画 */
+  try{
+    renderBuilder(); renderEnvRows(); updateConnUI(); renderLogAutoBtn(); renderLogStats();
+    renderLogDir(); renderLogAutoInfo();
+    /* 历史日志跟着 UI 语言一起重译（见 relocalizeLog）。
+       译完不再补「历史日志保持写入时的语言不变」那条提示 —— 现在不存在半中半英了。 */
+    relocalizeLog();
+    renderParse();
+    if(STATE.pkg) renderPkgList(); else refreshStartBtn();
+    const act=$('.nav-item.active .nav-label'); if(act) $('#crumbNow').textContent=act.textContent;
+  }catch(e){
+    /* 不要再写空 catch：这正是上面那个 $ / $$ 的错误被藏了这么久的原因。
+       切语言失败在界面上几乎看不出来，只剩「某些地方没跟着变」这种极难定位的现象。
+       只打印不抛出 —— 切语言不能因为某个区域重画失败就整体崩掉。 */
+    console.warn('[applyLang] 动态区域重画失败：',e);
+  }
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+/* 文件名规则：Tps_年_MMddHHmmss.tcupd */
+function autoFileName(){
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  return `Tps_${d.getFullYear()}_${p(d.getMonth()+1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.tcupd`;
+}
+
+/* ---------- 槽位定义（依据厂商包实测 devnum） ---------- */
+/* 设备号一律留空：厂商各机型设备号不同，留空由使用者按实物填写。
+   版本号给默认值 100：新固件从 100 起步逐版递增。
+   LCD 已移除：其入口序号与命令字始终是推测值，没有样本可依据。 */
+/* name 用协议里的槽位代号（DC / PCS / EMS / BMS），不用「太阳能板 / 逆变器 /
+   主控板 / Bms板」这类描述性叫法。理由有二：一是代号与语言无关，中英文同形，
+   tr() 不用为它再译一套；二是日志里「升级顺序 / 逐台对照 / 当前固件」出现的
+   都是同一块板，代号能让它们和标题栏的入口顺序、包头入口号直接对上。
+   设置页提示与引导气泡里也已统一成代号，界面中不再出现描述性叫法。 */
+const SLOTS=[
+ {key:'PV', idx:0, cmd:0x32, name:'DC',  sub:'DC 充电板 · dcBoard_dev', devnum:'', version:'100', color:'#F59E0B', limit:0x19000, op:'<=', limitTxt:'≤ 100 KB'},
+ {key:'PCS',idx:1, cmd:0x33, name:'PCS', sub:'PCS 逆变板 · inverter_dev', devnum:'', version:'100', color:'#A78BFA', limit:0x19000, op:'<=', limitTxt:'≤ 100 KB'},
+ {key:'EMS',idx:6, cmd:0x30, name:'EMS', sub:'EMS 主控 · mainBoard_dev',    devnum:'', version:'100', color:'#22C55E', limit:0x16800, op:'<',  limitTxt:'< 90 KB'},
+ {key:'BMS',idx:7, cmd:0x31, name:'BMS', sub:'BMS 从控 · bms_dev',          devnum:'', version:'100', color:'#FBBF24', limit:0x16800, op:'<',  limitTxt:'< 90 KB'},
+];
+const SLOT_BY_KEY=Object.fromEntries(SLOTS.map(s=>[s.key,s]));
+/* 需要执行 CRC 总校验（sub=4）的板子：只有 EMS 主控。
+   其余三类（BMS / 逆变器 / 充电板）只是把固件下载到本板 flash，
+   还要由本板转发给下游从机，写入结果不在本板校验范围内。 */
+const CRC_CHECK_KEYS=new Set(['EMS']);
+/* 需要做「复位后版本回读」校验的板子：同样只有 EMS 主控。
+   太阳能板 / 逆变器 / Bms板 的固件也只下载到本板 flash，版本号要等本板
+   转发给下游从机写完之后才会变 —— 实测固件发完立刻回读，拿到的仍是旧版本
+   （如 Bms板 包内 V101、设备回报 V26112），拿它比对只会把成功的一轮
+   判成失败。因此这三类一律不做版本校验：固件包发送完成即视为成功。 */
+const VER_CHECK_KEYS=new Set(['EMS']);
+/* 入口序号 → 设备（解析厂商包时用） */
+const IDX_INFO={0:{key:'PV',name:'DC',cmd:0x32},1:{key:'PCS',name:'PCS',cmd:0x33},
+  2:{key:'LCD',name:'LCD',cmd:0x34},3:{key:'X3',name:'扩展设备3',cmd:null},
+  4:{key:'X4',name:'扩展设备4',cmd:null},5:{key:'X5',name:'扩展设备5',cmd:null},
+  6:{key:'EMS',name:'EMS',cmd:0x30},7:{key:'BMS',name:'BMS',cmd:0x31}};
+
+/* ---------- 包结构常量 ---------- */
+const HEAD_SIZE=256,ENTRY_SIZE=14,ENTRY_BASE=10,DEVMAP_OFF=9,TIME_OFF=5,
+      TOTAL_OFF=248,HCRC_OFF=252,PAYLOAD_OFF=256;
+const MAGIC=[0x54,0x43,0x42,0x49,0x4E];
+/* 包头时间标识：生成文件的年月日 YYYYMMDD（小端 uint32）。
+   厂商包实测 0x01352826 = 20260902，故按小端存 4 字节。 */
+function buildDateNum(d){
+  const t=d||new Date();
+  return t.getFullYear()*10000+(t.getMonth()+1)*100+t.getDate();
+}
+/* 解析页把时间标识还原成可读日期，便于核对包的生成时间 */
+function parseTimeinfo(bytes){
+  const n=(bytes[0]|bytes[1]<<8|bytes[2]<<16|bytes[3]<<24)>>>0;
+  const y=Math.floor(n/10000), m=Math.floor(n/100)%100, d=n%100;
+  if(y<2000||y>2100||m<1||m>12||d<1||d>31) return null;
+  return {y,m,d,text:`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`};
+}
+
+/* 官方错误码定义（《上下位机通讯协议 V7.1》3.21 升级类命令）
+   UP_ERR_NO=0 无错误 / CMD=1 命令错误 / DEV=2 设备号错误 / ALL_PACK=3 总包数错误
+   ALL_SIZE=4 总字节数错误 / ALL_CHECK=5 总校验错误 / PACK_NUM=6 包序号错误
+   TIMEOUT=7 接收超时 / FLASH=8 flash 操作错误                        */
+const UP_ERR={0:'UP_ERR_NO 无错误',1:'UP_ERR_CMD 命令错误',2:'UP_ERR_DEV 设备号错误',
+  3:'UP_ERR_ALL_PACK 总包数错误',4:'UP_ERR_ALL_SIZE 总字节数错误',5:'UP_ERR_ALL_CHECK 总校验错误',
+  6:'UP_ERR_PACK_NUM 包序号错误',7:'UP_ERR_TIMEOUT 接收超时错误',8:'UP_ERR_FLASH flash操作错误'};
+
+/* =========================================================
+   协议 3.2 读取产品型号（命令码 0x01）
+   ------------------------------------------------------------
+   发送：AA AA + 地址码(2) + 0x01 + 长度(0x00) + 校验和(1)
+   应答：AA AA + 地址码(2) + 0x01 + 长度(n) + 数据(n) + 校验和(1)
+
+   注意这条应答与升级类应答结构不同：升级应答的第 2 个数据字节是 ack，
+   而 0x01 的数据域是一整块定长记录、全程没有 ack 语义。
+   所以解析时不能碰 assertOk，只能按 payload 偏移直接取字段。 */
+const VER_CMD=0x01;
+/* 应答数据域总长与各字段偏移（相对 payload 起点）
+   devFp/devBms/devPcs/devPv 是四个设备号字段的位置，协议里有定义但当前未参与
+   版本比对，故这里只保留偏移常量、不再单独建映射表；将来若要做「回读的设备号
+   是否与刚刷的那台一致」交叉校验，直接用 VER_OFF.dev* 取即可。 */
+const VER_LEN=65;
+const VER_OFF={
+  sn:0, fpHw:15, fpSw:18, proto:28, bms:30, pcs:35,
+  prodType:40, model:41, paramType:43, pv:44,
+  devFp:49, devBms:53, devPcs:57, devPv:61,
+};
+const PROD_TYPE=['A系列/TPS系列','F系列/未来系列','T系列/工具系列','H系列/家储系列','M系列/双向系列'];
+/* 去掉 \0 与首尾空白：定长字段未使用的位置会补 0 */
+const verText=(p,f,n)=>String.fromCharCode(...Array.from(p.slice(f,f+n))).replace(/\0/g,'').trim();
+/* 各设备的版本号字段在数据域里的偏移（EMS 即前面板，字段是 10 字节的另一种格式） */
+const VER_SLOT_OFF={EMS:VER_OFF.fpSw,BMS:VER_OFF.bms,PCS:VER_OFF.pcs,PV:VER_OFF.pv};
+
+/* 从 0x01 应答里抽出某块板子的软件版本。
+   两类字段格式完全不同，不能用同一套解析：
+     · EMS（前面板）10 字节 ASCII：YYXXyymmdd —— YY 大版本 + XX 小版本 + 发布日期。
+       包头里的版本号是纯数字（209 / 10601），对应的是前 4 位的 YYXX 连写，
+       因此取前 4 位数字参与比对，日期部分不参与。
+     · BMS / 逆变器 / 充电板 各 5 字节：[类型(1)][硬件YY(2)][软件XX(2)]，
+       类型 0 表示不带通信、整段全 0，此时没有版本可言。
+       包头版本对应软件 XX（小版本），硬件 YY 不参与比对。 */
+function parseSlotVersion(d,key){
+  const off=VER_SLOT_OFF[key];
+  if(off==null) return {raw:'',num:null,note:'该入口无版本字段'};
+  if(key==='EMS'){
+    const raw=verText(d,off,10);
+    const m=raw.match(/^(\d{4})/);
+    return {raw,num:m?parseInt(m[1],10):null,note:m?'':'格式非 YYXXyymmdd'};
+  }
+  const type=d[off];
+  if(type===0) return {raw:'0000',num:null,note:'不带通信'};
+  const hw=d[off+1]<<8|d[off+2], sw=d[off+3]<<8|d[off+4];
+  return {raw:`${type}:${hx(hw,2)}${hx(sw,2)}`,num:sw,
+    note:`类型${type} 硬件 V${hw} 软件 V${sw}`};
+}
+/* 整块 0x01 应答的可读摘要，写进日志便于现场核对 */
+function verSummary(d){
+  const f={};
+  f.sn=verText(d,VER_OFF.sn,15);
+  f.fpHw=verText(d,VER_OFF.fpHw,3);
+  f.fpSw=verText(d,VER_OFF.fpSw,10);
+  f.proto=verText(d,VER_OFF.proto,2);
+  f.bms=parseSlotVersion(d,'BMS').raw;
+  f.pcs=parseSlotVersion(d,'PCS').raw;
+  f.pv=parseSlotVersion(d,'PV').raw;
+  f.prodType=PROD_TYPE[d[VER_OFF.prodType]]||`未知(${d[VER_OFF.prodType]})`;
+  f.model=d[VER_OFF.model]<<8|d[VER_OFF.model+1];
+  return f;
+}
+
+/* ---------- 状态 ---------- */
+const STATE={
+  /* 版本号取 SLOTS 的声明默认值（100），不再初始化成空串 —— 之前「清空」会恢复成 100
+     而新开页面是空的，同一份工具两种初始态。touched 记录用户是否手改过，
+     未改过时 loadBin 仍按文件名猜版本（否则默认 100 会把猜测功能彻底盖掉）。 */
+  slots: SLOTS.map(s=>({key:s.key,idx:s.idx,devnum:s.devnum,version:s.version,touched:false,
+    data:null,sum:0,xor:0,fileName:'',enabled:false})),
+  fileName:autoFileName(),
+  pkg:null, pkgName:'',
+  running:false, abort:false, continueOnError:true,
+  /* 升级进度卡的渲染态：segList 每台一个状态位（''/ok/err），segCur 当前台下标，
+     segPct 本台进度（驱动分段块内部填充），upTotal / upDone 供整机维度算已传字节。 */
+  segList:[], segCur:-1, segPct:0, upTotal:0, upDone:0,
+};
+
+/* ---------- 工具函数 ---------- */
+function sum16(b,from=0,to=b.length){let s=0;for(let i=from;i<to;i++)s=(s+b[i])&0xFFFF;return s;}
+function xor8(b,from=0,to=b.length){let x=0;for(let i=from;i<to;i++)x^=b[i];return x&0xFF;}
+/* 版本号一律按纯数字录入，与包头 uint16 一致：112 就是 112（不写 1.12），10601 就是 10601。
+   容忍带点 / 带 V 前缀的旧值或粘贴值，读取时统一剥成数字串；
+   输入框 maxlength 故意放宽到 12，让 "V1.06.01" 这类写法能完整打进去，
+   真正的位数限制在这里（>0xFFFF 视为无效，失焦时回写为空）。 */
+function normVersion(str){
+  const m=String(str==null?'':str).match(/\d+/g);
+  if(!m||!m.length)return '';
+  const v=parseInt(m.join(''),10);
+  return Number.isFinite(v)&&v>0&&v<=0xFFFF?String(v):'';
+}
+function parseVersion(str){
+  const s=normVersion(str);
+  return s===''?null:parseInt(s,10);
+}
+function fmtVersion(v){
+  if(v==null||v===0)return '—';
+  return 'V'+v;
+}
+function devnumBytes(s){
+  const t=(s||'').trim().slice(0,4), b=new Uint8Array(4);
+  for(let i=0;i<4;i++) b[i]=t.length>i?(t.charCodeAt(i)&0xFF):0;
+  return b;
+}
+const toHexOf=u8=>Array.from(u8).map(b=>hx(b)).join(' ');
+
+/* =========================================================
+   包头合成
+   ========================================================= */
+function activeSlots(){ return STATE.slots.filter(s=>s.enabled&&s.data&&s.data.length); }
+
+/* 轻量元信息：只算参与槽位、载荷长度与 devmap，不分配载荷、不跑校验和。
+   renderBuilderMeta 在设备号/版本号的每个按键上都会调用，走 buildPackage 等于
+   每次都拷贝整包并对全部固件重算 sum16+xor8（四台约 45 万次字节运算 + 230KB 拷贝），
+   足以让输入明显掉帧。这里只做纯算术，O(槽位数)。 */
+function calcMeta(){
+  const act=activeSlots();
+  if(!act.length) return {ok:false,msg:'尚未勾选任何带固件的设备'};
+  const dup={};
+  act.forEach(s=>{ dup[s.idx]=(dup[s.idx]||0)+1; });
+  const clash=Object.keys(dup).filter(k=>dup[k]>1);
+  if(clash.length) return {ok:false,msg:'入口序号重复：'+clash.map(i=>'entry['+i+']').join('、')};
+  const payloadLen=act.reduce((a,s)=>a+s.data.length,0);
+  let devmap=0; act.forEach(s=>{devmap|=(1<<s.idx);});
+  return {ok:true,act,payloadLen,total:PAYLOAD_OFF+payloadLen,devmap};
+}
+
+function buildPackage(){
+  const meta=calcMeta();
+  if(!meta.ok) return meta;
+  const act=meta.act, payloadLen=meta.payloadLen, total=meta.total, devmap=meta.devmap;
+  /* 没有「导入反查」了，包头一律全新构造，不再沿用任何模板包 */
+  const hdr=new Uint8Array(HEAD_SIZE);
+  hdr.set(MAGIC,0);
+  /* 时间标识 = 生成时刻的 YYYYMMDD，按小端 uint32 写入。
+     此前这里写的是一个从厂商包抄来后固化的常量，导致任何时候生成的包
+     时间标识都一样（从解析页就能一眼看出来），且与实际生成日期对不上。
+     编码依据厂商包实测：SAGA2400_EMS_V207「26 28 35 01」→ 20260902、
+     SAGA2400_V210_TEST「94 28 35 01」→ 20261012，15 个包全部吻合。 */
+  hdr.set(le32(buildDateNum()),TIME_OFF);
+  hdr[DEVMAP_OFF]=devmap;
+
+  const byIdx=new Map(); act.forEach(s=>byIdx.set(s.idx,s));
+  for(let i=0;i<8;i++){
+    const s=byIdx.get(i), off=ENTRY_BASE+ENTRY_SIZE*i;
+    if(s){
+      const dv=new DataView(new ArrayBuffer(ENTRY_SIZE));
+      const dn=devnumBytes(s.devnum);
+      for(let k=0;k<4;k++) dv.setUint8(k,dn[k]);
+      /* sum/xor 在 loadBin 时算好存在槽位上，这里直接取：
+         固件字节在一次升级会话里不会变，没必要每次组包再扫一遍。 */
+      dv.setUint16(4,s.sum,true);
+      dv.setUint16(6,s.xor,true);
+      dv.setUint32(8,s.data.length,true);
+      dv.setUint16(12,parseVersion(s.version)||0,true);
+      hdr.set(new Uint8Array(dv.buffer),off);
+    } else {
+      for(let k=0;k<ENTRY_SIZE;k++) hdr[off+k]=0;   /* 未启用的入口整块清零 */
+    }
+  }
+  const tdv=new DataView(new ArrayBuffer(4));
+  tdv.setUint32(0,payloadLen,true);
+  hdr.set(new Uint8Array(tdv.buffer),TOTAL_OFF);
+  hdr[HCRC_OFF]=hdr[HCRC_OFF+1]=hdr[HCRC_OFF+2]=hdr[HCRC_OFF+3]=0;
+  const hc=sum16(hdr,0,HEAD_SIZE);
+  hdr[HCRC_OFF]=hc&0xFF; hdr[HCRC_OFF+1]=(hc>>8)&0xFF;
+
+  const out=new Uint8Array(total);
+  out.set(hdr,0);
+  let p=PAYLOAD_OFF;
+  /* 载荷必须与 devmap / payloadLen 同源，都取 act（已勾选的槽位）。
+     取消勾选只翻 enabled、并不清掉 s.data，若按「有数据」遍历 STATE.slots，
+     会把未勾选的固件也塞进包里；而 out 只按 act 的长度分配，写到后面直接越界抛
+     RangeError，且 renderBuilderMeta 每次渲染都会踩到。 */
+  for(const s of act.slice().sort((a,b)=>a.idx-b.idx)){
+    out.set(s.data,p); p+=s.data.length;
+  }
+  return {ok:true,bytes:out,total,devmap,headerCrc:hc,payloadLen};
+}
+
+/* =========================================================
+   包结构解析（供制作页反查与升级页识别复用）
+   ========================================================= */
+function parsePackage(buf){
+  if(buf.length<HEAD_SIZE) throw new Error('文件过小，不是有效的 .tcupd 包');
+  const dv=new DataView(buf.buffer,buf.byteOffset,buf.byteLength);
+  const magic=String.fromCharCode(...buf.slice(0,5));
+  if(magic!=='TCBIN') throw new Error(`包头标志错误：期望 "TCBIN"，实际 "${magic}"`);
+  const timeinfo=Array.from(buf.slice(TIME_OFF,TIME_OFF+4));
+  const devmap=buf[DEVMAP_OFF];
+  const entries=[]; let cursor=PAYLOAD_OFF;
+  for(let i=0;i<8;i++){
+    const off=ENTRY_BASE+ENTRY_SIZE*i;
+    const devnumRaw=Array.from(buf.slice(off,off+4));
+    const checksum=dv.getUint16(off+4,true), checkxor=dv.getUint16(off+6,true);
+    const filesize=dv.getUint32(off+8,true), version=dv.getUint16(off+12,true);
+    const enabled=((devmap>>i)&1)===1&&filesize>0;
+    const info=IDX_INFO[i]||{key:'?',name:'入口'+i,cmd:null};
+    const e={index:i,devnumRaw,devnum:String.fromCharCode(...devnumRaw).replace(/\0+$/,''),
+      checksum,checkxor,filesize,version,enabled,data:null,len:0,okSum:null,okXor:null,
+      key:info.key,name:info.name,cmd:info.cmd};
+    if(enabled){
+      const len=e.filesize; e.len=len;
+      if(cursor+len<=buf.length){
+        e.data=buf.slice(cursor,cursor+len);
+        e.okSum=(sum16(e.data)===checksum);
+        e.okXor=((xor8(e.data)&0xFF)===(checkxor&0xFF));
+      } else e.truncated=true;
+      cursor+=len;
+    }
+    entries.push(e);
+  }
+  const total=dv.getUint32(TOTAL_OFF,true), headerCrc=dv.getUint32(HCRC_OFF,true);
+  const hb=buf.slice(0,HEAD_SIZE); hb[HCRC_OFF]=0;hb[HCRC_OFF+1]=0;hb[HCRC_OFF+2]=0;hb[HCRC_OFF+3]=0;
+  const calcH=sum16(hb,0,HEAD_SIZE);
+  const payloadSize=cursor-PAYLOAD_OFF;
+  return {magic,timeinfo,devmap,entries,total,headerCrc,calcHeaderCrc:calcH,payloadSize,
+    okHeader:(headerCrc&0xFFFF)===calcH, okTotal:total===payloadSize,
+    okLength:(PAYLOAD_OFF+total)===buf.length, fileSize:buf.length};
+}
+
+/* =========================================================
+   日志 / Toast
+   ========================================================= */
+let logAutoScroll=true;
+/* 日志行数上限。此前 3000 行在四台设备一轮升级（约 3600 行）下不够用，
+   排障要看最早的握手帧，必须能兜住整轮。 */
+const LOG_MAX=20000;
+/* 自动滚动一旦赋值 scrollTop 就会强制同步重排整个日志区。
+   升级时每个包都打一条 [TX] 和一条 [RX]，四台设备一轮约 3600 行；
+   逐行滚动等于把这份重排成本逐包放大（本机实测 ~7ms/行，整轮约 25 秒主线程阻塞）。
+   改成攒到下一帧统一滚一次，视觉上无差别，代价从 O(行数) 降到 O(帧数)。 */
+let scrollTarget=null, scrollRaf=0;
+function scheduleAutoScroll(el){
+  scrollTarget=el;
+  if(scrollRaf) return;
+  scrollRaf=requestAnimationFrame(()=>{
+    scrollRaf=0;
+    if(scrollTarget) scrollTarget.scrollTop=scrollTarget.scrollHeight;
+  });
+}
+const LOG_CLS={tx:'log-tx',rx:'log-rx',err:'log-err',warn:'log-warn',info:'log-info',ok:'log-ok',head:'log-head'};
+/* 级别由 kind 推导，不再单独传参 —— 免得多一个字段就多一处可能传错的地方。 */
+const LOG_LEVEL={err:'ERROR',warn:'WARN',tx:'INFO',rx:'INFO',ok:'INFO',info:'INFO',head:'INFO'};
+function mkSpan(cls,txt){const s=document.createElement('span');s.className=cls;s.textContent=txt;return s;}
+/* 帧行四段：长度 / 原始字节 / 协议解析 / CRC。四色分开是为了扫一眼就能
+   判断「是哪一帧、长度对不对、校验过没过」，而不是在一长串 hex 里找。 */
+const FRAME_CLS=['lf-len','lf-hex','lf-parsed','lf-crc'];
+/* 「键=值」只在这一种形状下才按结构渲染：整行切开后每段都匹配。
+   逐个 token 扫描会把散文里的 a=b 也拆坏，所以必须整体锚定。
+   引号必须落在值上而不是整行上：顺序="DC(HS02) → PCS(HS01)" 这种值
+   自带空格，普通切分会在箭头处断开，分出来的就不是键值对了。 */
+const KV_TOKENS=/[\w\u4e00-\u9fff]+="[^"]*"|[\w\u4e00-\u9fff]+=\S+|\S+/g;
+const KV_TOKEN=/^[\w\u4e00-\u9fff]+=("[^"]*"|\S+)$/;
+function renderLogBody(el,raw,kind){
+  el.textContent='';
+  const lv=LOG_LEVEL[kind]||'INFO';
+  el.appendChild(mkSpan('lvl lvl-'+lv.toLowerCase(),'['+lv+']'));
+  el.appendChild(document.createTextNode(' '));
+  /* 结构判定必须在翻译之前做。译成英文后值里会带空格
+     （total=225.7 KB、progress=1/4），按空格切就切不成键值对了，
+     整行会退化成纯文本。这里判定完，再逐段翻译。 */
+  const dir=/^\[(TX|RX)\]\s*/.exec(raw);
+  const body=dir?raw.slice(dir[0].length):raw;
+  if(dir){
+    el.appendChild(mkSpan(dir[1]==='TX'?'pfx-tx':'pfx-rx','['+dir[1]+']'));
+    el.appendChild(document.createTextNode(' '));
+  }
+  const parts=body.split(/\s*\|\s*/);
+  if(parts.length>=3&&/^LEN=/.test(parts[0])){
+    for(let i=0;i<parts.length;i++){
+      if(i) el.appendChild(mkSpan('lf-sep',' | '));
+      let c=FRAME_CLS[i]||'';
+      if(i===3&&parts.length===4) c+=' '+(/\bOK\b/.test(parts[3])?'lf-crc-ok':'lf-crc-fail');
+      el.appendChild(mkSpan(c,tr(parts[i])));
+    }
+    return;
+  }
+  const toks=body.match(KV_TOKENS)||[];
+  /* toks[0] 是行首标签（没有 =），所以只校验它后面那些 token。
+     把标签也拿去校验的话，没有任何一行能通过判定。 */
+  if(!dir&&toks.length>1&&toks.slice(1).every(t=>KV_TOKEN.test(t))){
+    el.appendChild(mkSpan('lf-label',tr(toks[0])));
+    for(let i=1;i<toks.length;i++){
+      const kv=/^([^=]+)=(.*)$/.exec(toks[i]);
+      el.appendChild(document.createTextNode(' '));
+      el.appendChild(mkSpan('lf-k',tr(kv[1])));
+      el.appendChild(document.createTextNode('='));
+      el.appendChild(mkSpan('lf-v',tr(kv[2])));
+    }
+    return;
+  }
+  el.appendChild(document.createTextNode(tr(body)));
+}
+function logTo(el,kind,msg){
+  const line=document.createElement('div');
+  line.className='log-line';
+  /* 方向记在行节点上：裁剪超限时要按被删掉的那些行回退计数，
+     事后拿不到消息原文，只能靠这个字段。
+     四段判据必须统一用 charCodeAt：charAt 返回的是字符串，
+     写成 msg.charAt(3)===93 就是拿 "]" 和 93 比，恒为 false（踩过一次）。 */
+  line.__dir=(msg.charCodeAt(0)===91&&msg.charCodeAt(1)===84&&msg.charCodeAt(2)===88&&msg.charCodeAt(3)===93) ? 'TX'
+            :(msg.charCodeAt(0)===91&&msg.charCodeAt(1)===82&&msg.charCodeAt(2)===88&&msg.charCodeAt(3)===93) ? 'RX' : '';
+  const cls=LOG_CLS[kind]||'';
+  /* 直接建节点，不用 innerHTML + querySelector：省掉一次 HTML 解析和一次选择器查找 */
+  const t=document.createElement('span');
+  t.className='t'; t.textContent=nowStr();
+  const m=document.createElement('span');
+  m.className='m '+cls; m.__zh=msg; m.__kind=kind; renderLogBody(m,msg,kind);
+  line.appendChild(t); line.appendChild(m);
+  el.appendChild(line);
+  if(line.__dir==='TX') LOGSTAT.tx++; else if(line.__dir==='RX') LOGSTAT.rx++;
+  /* 上限提到 2 万行：整机升级每包两条 [TX]/[RX]，四台设备一轮约 3600 行，
+     排障时往往要看完整一轮，3000 行会把最早的握手帧直接挤掉。
+     2 万行 ≈ 6 万个节点，仍在 Chromium 单页可承受范围；真正的开销在重排，
+     已由上面的 scheduleAutoScroll 攒到每帧一次兜住。
+     超限后一次性裁掉超出的一段，而不是每行只删一条 —— 后者在满载时
+     每写一行都要动一次 DOM 头节点，长时间升级会明显拖慢。 */
+  const over=el.children.length-LOG_MAX;
+  if(over>0){
+    /* 搬进 fragment 就等于把节点从 el 上摘下来了 —— fragment 自身永远不会成为
+       el 的子节点，所以这里**不能**再 el.removeChild(cut)：
+       那句只在 over>0 时才执行，一旦执行必抛 NotFoundError，
+       而且异常会顺着 logTo → logU 一路冒到升级主循环，把整轮升级打断。
+       （此前一直没暴露，是因为要攒够 2 万行才走得到这里。）
+       直接丢弃 fragment 即可，摘下来的节点随它一起被回收。 */
+    const cut=document.createDocumentFragment();
+    for(let i=0;i<over;i++){
+      const c=el.firstChild;
+      if(c.__dir==='TX') LOGSTAT.tx--; else if(c.__dir==='RX') LOGSTAT.rx--;
+      cut.appendChild(c);
+    }
+  }
+  if(logAutoScroll) scheduleAutoScroll(el);
+}
+/* 统计浮层也是一帧一次，而不是每写一行就重画一次。
+   renderLogStats 会写 6 个节点的 textContent，升级一轮三千多行就是两万多次文本写，
+   每次都让这几个节点作废一次样式。攒到帧里统一画，肉眼无差别。 */
+let statRaf=0;
+const logU=(k,m)=>{
+  const el=$('#uLog');
+  logTo(el,k,m);
+  /* 累计条数在这里记，而不是回头数 el.children.length：
+     自动保存触发点必须和写入点是同一个位置，中间隔着异步写盘，
+     用 children.length 会在「已攒够但还没落盘」的窗口里反复触发。 */
+  logAutoCount++;
+  /* 触发判定必须排在 statRaf 的提前返回之前：整机升级一口气写几千行时，
+     第一行就把 statRaf 占上了，之后每行都从这里 return 出去，
+     判定挂在后面就再也轮不到 —— 实测整整 2000 行都不会触发，
+     要等下一条日志到来才补触发，那一批就已经超量了。 */
+  if(logAutoSave&&logAutoCount>=LOG_SAVE_MAX) autoSaveLog();
+  if(statRaf) return;
+  statRaf=requestAnimationFrame(()=>{ statRaf=0; renderLogStats(); });
+};
+const logClear=()=>{ $('#uLog').innerHTML=''; LOGSTAT.tx=0; LOGSTAT.rx=0; logAutoCount=0;
+  if(statRaf){cancelAnimationFrame(statRaf);statRaf=0;} renderLogStats(); renderLogAutoInfo(); };
+/* 日志自动滚动开关：暂停后可自由手动滚动，恢复时跳回底部 */
+/* 按钮文案与「是否跳到底部」拆成两半：切语言只需要前者。
+   el.scrollTop=el.scrollHeight 是写值前强制读 scrollHeight，会同步重排整棵日志树，
+   3600 行实测单次 215 ms，比重画全部日志行还贵，切语言时绝不能再碰。 */
+function renderLogAutoBtn(){
+  const b=$('#uLogPause');
+  if(b) b.innerHTML=tr(logAutoScroll?'<svg><use href="#i-clock"/></svg>暂停滚动'
+                            :'<svg><use href="#i-play"/></svg>继续滚动');
+}
+function setLogAuto(on){
+  logAutoScroll=!!on;
+  renderLogAutoBtn();
+  if(logAutoScroll){ const el=$('#uLog'); el.scrollTop=el.scrollHeight; }
+}
+/* 把日志区前 limit 行取成「时间戳 + 中文正文」的数组。limit 省略时取全部。
+   导出与自动保存共用这一份取行逻辑，两条路的语言与格式必须一致。 */
+function collectLogRows(limit){
+  /* 导出恒为中文，与界面当前语言无关：日志跟着 UI 语言走之后，
+     界面上是英文时直接取 textContent 会导出一份英文的。
+     中文是源语言，tr() 在 LANG==='zh' 时是恒等的，
+     所以做法是把 LANG 临时按成 zh 再渲染一份，而不是去反译英文。
+     用完必须还原（try/finally），否则紧接着的 toast 会跟着变中文。
+     渲染到游离 span 上取 textContent，不动屏幕上的日志。
+
+     用 children 下标而不是 querySelector：每行两次选择器匹配，一万行就是两万次，
+     匹配还要穿过 content-visibility 的样式规则，够卡一下了。
+     行结构是 logTo 里写死的 [.t, .m]，下标取即可。
+     读的是 textContent —— content-visibility 跳过的行照样能取到原文（innerText 不行）。
+     自动保存只需前若干行：直接对 children 取一段，比 $$ 全量选择器再 slice 便宜。 */
+  const kids=$('#uLog').children;
+  const n=(limit==null||limit>kids.length)?kids.length:Math.max(0,limit);
+  const keep=LANG;
+  const rows=new Array(n);
+  try{
+    LANG='zh';
+    const buf=document.createElement('span');
+    for(let i=0;i<n;i++){
+      const el=kids[i], t=el.children[0], m=el.children[1];
+      const ts=t?t.textContent:'';
+      if(!m||m.__zh===undefined){ rows[i]=ts; continue; }
+      /* 纯 ASCII 的行两种语言渲染结果完全一致（理由见 relocalizeLog 的 CJK 短路说明），
+         所以屏幕上这份 textContent 已经是中文形态，直接取即可。
+         只有含汉字的行才需要借 buf 另渲染一份中文副本 —— 一千多行里通常只有几十行，
+         否则每行都重建一遍节点，导出反而比重画整页还慢。 */
+      if(!CJK_RE.test(m.__zh)){ rows[i]=`${ts}  ${m.textContent}`; continue; }
+      buf.textContent='';
+      renderLogBody(buf,m.__zh,m.__kind);
+      rows[i]=`${ts}  ${buf.textContent}`;
+    }
+  }finally{ LANG=keep; }
+  return rows;
+}
+/* 日志 txt 的头部注释与文件名：导出与自动保存共用，保证两个来源的产物格式一致。 */
+function logFileHead(rows){
+  const d=new Date(),p=n=>String(n).padStart(2,'0');
+  const seq=logSaveSeq++;
+  const name=`SkyTimes_升级日志_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${seq>0?'_'+seq:''}.txt`;
+  const head=`# SkyTimes 升级工具 · 交互日志\r\n# 导出时间：${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}\r\n# 共 ${rows.length} 条\r\n\r\n`;
+  return {name,head};
+}
+/* 导出当前日志为 txt（含时间戳与消息正文，保留原始顺序） */
+function exportLog(){
+  const rows=collectLogRows();
+  if(!rows.length){ toast('日志为空，无可导出内容','warn'); return; }
+  const {name,head}=logFileHead(rows);
+  download(new TextEncoder().encode(head+rows.join('\r\n')+'\r\n'),name);
+  toast('已导出 '+rows.length+' 条日志','ok');
+}
+
+/* =========================================================
+   日志自动保存：满 LOG_SAVE_MAX 条落盘一次，然后清掉已保存的旧日志重新计数
+   ========================================================= */
+/* 一批的条数。整机升级一台设备约 900 行（每包一条 TX + 一条 RX），
+   2000 条 ≈ 两台设备的量：一轮多机升级会切好几批，磁盘占用可控，
+   单文件打开时又能直接看到上下文，不会碎成几百个小 txt。 */
+const LOG_SAVE_MAX=2000;
+/* 落盘子目录名：与固件导出同在所选目录下，日志单独归一个文件夹，不和 .tcupd 混在一起。 */
+const LOG_SAVE_SUBDIR='logs';
+const LOG_SAVE_IDB='skytimes-tool', LOG_SAVE_STORE='kv', LOG_SAVE_KEY='logDir';
+/* File System Access（showDirectoryPicker）是往任意目录写文件的唯一途径，
+   Chrome / Edge 支持；Firefox / Safari 没有，页面必须能在这类浏览器上照常跑，
+   所以只在真要写目录时才用到它，其余一律回退到浏览器下载目录。 */
+const FSAA_OK=typeof window.showDirectoryPicker==='function';
+/* 同名文件在同一秒内连发两次（极少见，但 2000 条一批在高速日志下并非不可能）
+   靠这个序号错开，避免 createWritable 覆盖前一批。 */
+let logSaveSeq=0;
+let logAutoSave=true, logAutoCount=0, logSaving=false, logDirHandle=null, logDirPerm='none';
+
+/* 目录句柄的持久化：IndexedDB 是唯一能存 FileSystemHandle 的地方
+   （localStorage 只能存字符串，存进去就是 "[object FileSystemHandle]"）。
+   file:// 下 Chrome 可能禁掉 IndexedDB，所以每一步都 try/catch，
+   失败只降级为「本次会话有效」，不能因此影响日志功能。 */
+function idbKv(mode,run){
+  return new Promise((res,rej)=>{
+    let req;
+    try{ req=indexedDB.open(LOG_SAVE_IDB,1); }catch(e){ rej(e); return; }
+    req.onupgradeneeded=()=>{ const db=req.result; if(!db.objectStoreNames.contains(LOG_SAVE_STORE)) db.createObjectStore(LOG_SAVE_STORE); };
+    req.onerror=()=>rej(req.error||new Error('IndexedDB 不可用'));
+    req.onsuccess=()=>{
+      const db=req.result;
+      let tx;
+      try{ tx=db.transaction(LOG_SAVE_STORE,mode); }catch(e){ db.close(); rej(e); return; }
+      const out=run(tx.objectStore(LOG_SAVE_STORE));
+      /* 取值必须认 IDBRequest 本身：库里没有这条记录时 out.result 是 undefined，
+         写成「result !== undefined 才返回它」会把整个 request 对象当成值交出去 ——
+         句柄位一 truthy，页面上就成了「undefined/logs」这种假目录。 */
+      tx.oncomplete=()=>{ db.close(); res(out&&'result' in out?out.result:out); };
+      tx.onerror=tx.onabort=()=>{ db.close(); rej(tx.error||new Error('IndexedDB 事务失败')); };
+    };
+  });
+}
+/* 权限查询/申请：queryPermission 随时可问，requestPermission 必须由用户手势触发。
+   这就是为什么重新授权只能挂在「选择目录」按钮和自动保存勾选框上 ——
+   写日志本身没有手势，那时再申请必然失败。 */
+async function dirPerm(h,request){
+  if(!h||typeof h.queryPermission!=='function') return 'granted';
+  try{
+    let p=await h.queryPermission({mode:'readwrite'});
+    if(p!=='granted'&&request&&typeof h.requestPermission==='function') p=await h.requestPermission({mode:'readwrite'});
+    return p||'denied';
+  }catch(e){ return 'denied'; }
+}
+async function saveLogDirHandle(h){
+  try{ await idbKv('readwrite',s=>s.put(h,LOG_SAVE_KEY)); }catch(e){ /* 存不下就只在本页有效 */ }
+}
+async function loadLogDirHandle(){
+  try{ return await idbKv('readonly',s=>s.get(LOG_SAVE_KEY))||null; }catch(e){ return null; }
+}
+/* 取 logs 子文件夹句柄：不存在就建（create:true）。权限不足时返回 null，
+   由调用方决定是回退到下载目录还是提示重新授权。 */
+async function getLogsDir(create){
+  if(!logDirHandle) return null;
+  const perm=await dirPerm(logDirHandle,create);
+  logDirPerm=perm;
+  if(perm!=='granted') return null;
+  try{ return await logDirHandle.getDirectoryHandle(LOG_SAVE_SUBDIR,{create:!!create}); }
+  catch(e){ console.warn('[log-autosave] 取 logs 子目录失败：',e); return null; }
+}
+/* 真正的落盘。优先写进 <所选目录>/logs；目录没选、没权限或浏览器不支持
+   File System Access 时，一律回退到浏览器下载目录 —— 与固件导出的落点一致，
+   差别只在于回退路径建不出 logs 子文件夹，文件名里带 _logs 以示区分。 */
+async function saveLogToDisk(rows){
+  if(!rows.length) return {ok:false,empty:true};
+  const {name,head}=logFileHead(rows);
+  const bytes=new TextEncoder().encode(head+rows.join('\r\n')+'\r\n');
+  if(logDirHandle){
+    const dir=await getLogsDir(true);
+    if(dir){
+      try{
+        const fh=await dir.getFileHandle(name,{create:true});
+        const w=await fh.createWritable();
+        await w.write(bytes);
+        await w.close();
+        return {ok:true,fallback:false,name,path:`${logDirHandle.name}${LOG_SAVE_SUBDIR?'/'+LOG_SAVE_SUBDIR:''}/${name}`};
+      }catch(e){ console.warn('[log-autosave] 写入目录失败：',e); }
+    }
+  }
+  /* 回退：与「导出」按钮走同一条路（浏览器下载目录）。
+     a.download 建不出子文件夹，文件名里插一个 _logs_，看名字就知道落在哪。 */
+  download(bytes,name.replace('SkyTimes_升级日志_','SkyTimes_升级日志_logs_'));
+  return {ok:true,fallback:true,name};
+}
+/* 摘掉日志区开头 n 行，并按行上记的方向回退收发计数。
+   自动保存不能整块 innerHTML=''：落盘是异步的，这期间升级循环还在往里写新行，
+   整块清空会把保存完成之后新产生的日志一起抹掉。只摘已保存的前 n 行才是对的。 */
+function dropLogHead(n){
+  const el=$('#uLog');
+  const cut=document.createDocumentFragment();
+  for(let i=0;i<n&&el.firstChild;i++){
+    const c=el.firstChild;
+    if(c.__dir==='TX') LOGSTAT.tx--; else if(c.__dir==='RX') LOGSTAT.rx--;
+    cut.appendChild(c);
+  }
+  logAutoCount=Math.max(0,logAutoCount-n);
+}
+/* 触发一次自动保存。写盘期间继续来的日志留在屏幕上，不会被这次保存带走。 */
+async function autoSaveLog(){
+  if(logSaving||logAutoCount<LOG_SAVE_MAX) return;
+  const n=Math.min(logAutoCount,$('#uLog').children.length);
+  if(n<1){ logAutoCount=0; return; }
+  logSaving=true;
+  renderLogAutoInfo();
+  let r;
+  try{ r=await saveLogToDisk(collectLogRows(n)); }
+  catch(e){ console.warn('[log-autosave] 保存异常：',e); r={ok:false}; }
+  finally{ logSaving=false; }
+  if(r&&r.ok){
+    dropLogHead(n);
+    toast(r.fallback?'已自动保存 '+n+' 条日志（浏览器下载目录）':'已自动保存 '+n+' 条日志到 '+r.path,'ok');
+    /* 攒够下一批的量之前别再弹提示 */
+  }else{
+    /* 落盘失败就不清日志（数据必须留在屏幕上），并关掉自动保存：
+       否则每一行日志都会重试一次，把串口升级的主线程彻底堵死。 */
+    setLogAutoSave(false);
+    toast('自动保存失败，已保留当前日志并关闭自动保存','err');
+  }
+  renderLogStats(); renderLogAutoInfo();
+}
+function setLogAutoSave(on){
+  logAutoSave=!!on;
+  const cb=$('#uLogAuto'); if(cb) cb.checked=logAutoSave;
+  try{ localStorage.setItem('skytimes-log-autosave',logAutoSave?'1':'0'); }catch(e){}
+  if(logAutoSave){
+    /* 勾选是用户手势：趁它还在，把目录权限一并要下来，
+       否则攒够 2000 条时只有 queryPermission，prompt 状态下必然写不进去。
+       目录必须在手势里选，浏览器硬性要求，所以启动时没法替用户弹框；
+       于是只有用户自己取消勾选又勾回来（=明确表示要这个功能）才提示去选目录，
+       第一次打开工具不打扰。结果拿到后再定提示：拿到目录说规则，没拿到说去哪选。 */
+    ensureLogDirOnGesture().then(()=>{
+      /* 没拿到目录时分两种情况说：浏览器根本不支持，就别让用户去点一个点不动的按钮。 */
+      const msg=logDirHandle?'自动保存已开启，每 2000 条写入 logs 文件夹并清空当前日志'
+              :FSAA_OK?'自动保存已开启，点日志栏「选择目录」指定位置，日志将写入该目录的 logs 子文件夹'
+                     :'当前浏览器不支持写入指定目录（需 Chrome / Edge），自动保存将改用浏览器下载目录';
+      toast(msg,logDirHandle?'ok':FSAA_OK?'info':'warn');
+    });
+  }else{
+    toast('自动保存已关闭','info');
+  }
+  renderLogAutoInfo();
+}
+/* 目录按钮 / 勾选自动保存时调用：两者都是用户手势，可以合法地弹目录选择框
+   与申请权限。已选好且有权限时静默返回，不打扰用户。 */
+async function ensureLogDirOnGesture(force){
+  if(!FSAA_OK) return false;
+  if(logDirHandle&&!force){
+    const p=await dirPerm(logDirHandle,true);
+    if(p==='granted'){ logDirPerm=p; renderLogAutoInfo(); return true; }
+  }
+  return pickLogDir();
+}
+async function pickLogDir(){
+  if(!FSAA_OK){
+    toast('当前浏览器不支持写入指定目录（需 Chrome / Edge），自动保存将改用浏览器下载目录','warn');
+    return false;
+  }
+  let h;
+  try{
+    h=await showDirectoryPicker({id:'skytimes-export',mode:'readwrite',startIn:'downloads'});
+  }catch(e){
+    if(e&&e.name!=='AbortError') toast('选择目录失败','err');
+    else toast('已取消目录选择','info');
+    return false;
+  }
+  logDirHandle=h; logDirPerm='granted';
+  await saveLogDirHandle(h);
+  renderLogDir(); renderLogAutoInfo();
+  return true;
+}
+/* 目录按钮上的文字：有句柄显示 <目录名>/logs，没有则显示「选择目录」。
+   整段是运行期拼的，已在 I18N_SKIP 里登记，不参与静态扫描。 */
+function renderLogDir(){
+  const b=$('#uLogDir'); if(!b) return;
+  const t=b.querySelector('#uLogDirName')||b;
+  const name=logDirHandle?`${logDirHandle.name}/${LOG_SAVE_SUBDIR}`:tr('选择目录');
+  t.textContent=name;
+  b.title=logDirHandle?tr('日志目录')+': '+logDirHandle.name+'/'+LOG_SAVE_SUBDIR
+                     :tr('点击「选择目录」指定自动保存位置（与固件导出同一目录，文件写入其 logs 子文件夹）');
+}
+/* 状态行：累计条数 + 写入位置。切语言时整段重画（节点已在 I18N_SKIP 中）。 */
+function renderLogAutoInfo(){
+  const box=$('#uLogAutoInfo'); if(!box) return;
+  const t=box.querySelector('.lat');
+  box.classList.toggle('on',logAutoSave&&logDirHandle!=null);
+  box.classList.toggle('warn',logAutoSave&&logDirHandle==null);
+  if(!t) return;
+  if(logSaving) t.textContent=tr('日志目录')+': '+tr('正在保存…');
+  else if(!logAutoSave) t.textContent=tr('自动保存已关闭，日志只保留在界面中');
+  else if(!logDirHandle) t.textContent=tr('自动保存：')+`${logAutoCount}/${LOG_SAVE_MAX}`+tr(' 条（满额自动落盘）')
+    +' · '+tr('目录未选择，自动保存将改用浏览器下载目录');
+  else t.textContent=tr('自动保存：')+`${logAutoCount}/${LOG_SAVE_MAX}`+tr(' 条（满额自动落盘）')
+    +' · '+logDirHandle.name+'/'+LOG_SAVE_SUBDIR+'/';
+}
+/* 启动时把上次选的目录读回来。权限在多数情况下会随句柄一起恢复；
+   真落到 prompt 也不用在这里申请（没有手势），等到用户点目录按钮或勾自动保存时再要。
+   这里不做任何提示：首次打开只把界面画对，不打断。 */
+async function initLogAutoSave(){
+  const cb=$('#uLogAuto');
+  let saved=null;
+  try{ saved=localStorage.getItem('skytimes-log-autosave'); }catch(e){}
+  if(saved!=null) logAutoSave=saved!=='0';
+  if(cb) cb.checked=logAutoSave;
+  const h=await loadLogDirHandle();
+  if(h){ logDirHandle=h; logDirPerm=await dirPerm(h,false); }
+  renderLogDir(); renderLogAutoInfo();
+}
+/* 提示消息：SVG 图标 + 状态标签 + 文本，堆在右上角成一条消息日志 */
+const TOAST_KIND={
+  ok:  {icon:'i-check',label:'成功'},
+  err: {icon:'i-alert',label:'错误'},
+  warn:{icon:'i-alert',label:'警告'},
+  info:{icon:'i-info', label:'信息'},
+};
+const TOAST_MAX=5, TOAST_MS=kind=>kind==='err'?5200:3600;
+function toast(msg,kind='ok'){
+  const m=TOAST_KIND[kind]||TOAST_KIND.info;
+  const el=document.createElement('div');
+  el.className='toast '+kind;
+  el.innerHTML=`<svg><use href="#${m.icon}"/></svg><span class="tt"></span><span class="tx"></span>`;
+  el.querySelector('.tt').textContent=tr(m.label);
+  el.querySelector('.tx').textContent=tr(msg);
+  const wrap=$('#toasts'), timer={};
+  const kill=()=>{ clearTimeout(timer.t); el.classList.add('out');
+    setTimeout(()=>el.remove(),240); };
+  el.addEventListener('click',kill);            /* 点击即可提前关闭 */
+  wrap.append(el);                              /* 贴角堆叠：最新一条在最下，旧的向上顶 */
+  /* 超量丢最旧的那条 —— 不能用 lastElementChild：
+     wrap 是 column 且锚在 bottom，最后一个子元素正是刚挂上的新 toast，
+     删它等于用户永远看不到刚发生的提示。 */
+  while(wrap.children.length>TOAST_MAX) wrap.firstElementChild.remove();
+  timer.t=setTimeout(kill,TOAST_MS(kind));
+  el.addEventListener('mouseenter',()=>clearTimeout(timer.t));  /* 悬停时暂不消失 */
+  el.addEventListener('mouseleave',()=>{ timer.t=setTimeout(kill,1200); });
+}
+
+/* =========================================================
+   串口
+   ========================================================= */
+const S={port:null,reader:null,writer:null,rx:new Uint8Array(0),waiters:[],connected:false};
+function frameCheck(f){let s=0;for(let i=2;i<f.length-1;i++)s=(s+f[i])&0xFF;return s;}
+function buildFrame(cmd,payload,addr=0){
+  const p=payload||new Uint8Array(0);
+  const b=new Uint8Array(p.length+7);
+  b[0]=0xAA;b[1]=0xAA;b[2]=(addr>>8)&0xFF;b[3]=addr&0xFF;b[4]=cmd&0xFF;b[5]=p.length;
+  b.set(p,6); b[p.length+6]=frameCheck(b);
+  return b;
+}
+const toHex=b=>Array.from(b).map(x=>hx(x)).join(' ');
+
+function onBytes(chunk){
+  const m=new Uint8Array(S.rx.length+chunk.length);
+  m.set(S.rx,0); m.set(chunk,S.rx.length); S.rx=m;
+  while(S.rx.length>=2){
+    let i=0;
+    while(i+1<S.rx.length&&!(S.rx[i]===0xAA&&S.rx[i+1]===0xAA)) i++;
+    if(i>0){ logU('warn',`跳过噪声字节 ${i} 个`); S.rx=S.rx.slice(i); }
+    if(S.rx.length<7) return;
+    const len=S.rx[5], total=len+7;
+    if(S.rx.length<total) return;
+    const f=S.rx.slice(0,total); S.rx=S.rx.slice(total);
+    handleFrame(f);
+  }
+}
+function handleFrame(f){
+  const ok=frameCheck(f)===f[f.length-1];
+  const len=f[5], cmd=f[4];
+  const sub=len>=1?f[6]:-1, ack=len>=2?f[7]:-1;
+  const hex=toHex(f);
+  logU(ok?'rx':'err',`[RX] LEN=${f.length} | ${hex} | {"cmd":"0x${hx(cmd)}","sub":"${len>=1?'0x'+hx(sub):'--'}","ack":${ack}} | CRC=${ok?'OK':'FAIL'}`);
+  if(!ok) return;
+  for(let i=0;i<S.waiters.length;i++){
+    const w=S.waiters[i];
+    if(w.cmd===cmd&&(w.sub<0||w.sub===sub)){
+      S.waiters.splice(i,1); clearTimeout(w.timer);
+      w.resolve({frame:f,cmd,sub,ack,payload:f.slice(6,6+len)});
+      return;
+    }
+  }
+}
+/* 读循环收尾：设备被物理拔掉时 read() 会抛错并跳出，若不在这里把 S.connected 落下，
+   顶栏会一直亮着「已连接」，用户要等到下一次 writeFrame 才在深处看到报错，
+   beforeunload 的误关拦截也会一直挂着。 */
+async function readLoop(){
+  let err=null;
+  while(S.reader){
+    let r;
+    try{ r=await S.reader.read(); }catch(e){ err=e; break; }
+    if(r.done) break;
+    if(r.value&&r.value.length) onBytes(r.value);
+  }
+  if(!S.connected) return;        /* 主动断开：serialDisconnect 已先行清标记 */
+  S.connected=false; S.reader=null; updateConnUI();
+  logU('err','[fail] 串口已断开：'+(err&&err.message?err.message:'读取已结束'));
+}
+async function serialConnect(){
+  if(!('serial' in navigator)){
+    toast('当前浏览器不支持 Web Serial，请使用 Chrome / Edge','err');
+    logU('err','[fail] 浏览器不支持 Web Serial API（需 Chrome/Edge 89+）');
+    return false;
+  }
+  try{
+    const port=await navigator.serial.requestPort();
+    const baud=parseInt($('#uBaud').value,10)||115200;
+    await port.open({baudRate:baud,dataBits:8,stopBits:1,parity:'none',bufferSize:4096});
+    S.port=port; S.reader=port.readable.getReader(); S.writer=port.writable.getWriter();
+    S.rx=new Uint8Array(0); S.connected=true;
+    readLoop();
+    updateConnUI();
+    logU('ok',`串口连接 波特率=${baud} 数据位=8 停止位=1 校验位=N`); toast('串口已连接');
+    return true;
+  }catch(e){
+    const m=(e&&e.message)?e.message:e;
+    logU('err','[fail] 连接失败：'+m); toast('连接失败：'+m,'err');
+    return false;
+  }
+}
+async function serialDisconnect(){
+  /* 先清 connected 再 cancel：cancel 会让挂起的 read() 立刻收尾，
+     readLoop 靠这个标记区分「用户主动断开」与「设备被拔」。 */
+  S.connected=false;
+  try{ if(S.reader) await S.reader.cancel(); }catch(e){}
+  try{ if(S.reader) S.reader.releaseLock(); }catch(e){}
+  try{ if(S.writer){ await S.writer.close(); S.writer.releaseLock(); } }catch(e){}
+  try{ if(S.port) await S.port.close(); }catch(e){}
+  S.port=S.reader=S.writer=null; S.connected=false;
+  S.waiters.forEach(w=>{clearTimeout(w.timer);w.reject(new Error('已断开'));});
+  S.waiters=[];
+  updateConnUI(); logU('warn','串口断开 原因="设备或线缆已移除"');
+}
+async function writeFrame(cmd,payload,addr){
+  if(!S.writer) throw new Error('串口未连接');
+  const f=buildFrame(cmd,payload,addr);
+  logU('tx',`[TX] LEN=${f.length} | ${toHex(f)} | {"cmd":"0x${hx(cmd)}","sub":"${payload&&payload.length?'0x'+hx(payload[0]):'--'}","len":${payload?payload.length:0}} | CRC=OK`);
+  await S.writer.write(f);
+  return f;
+}
+function cancelWait(rec){
+  const i=S.waiters.indexOf(rec);
+  if(i>=0) S.waiters.splice(i,1);
+  if(rec.timer){ clearTimeout(rec.timer); rec.timer=0; }
+}
+function waitFrame(cmd,sub,timeout){
+  const rec={cmd,sub};
+  const p=new Promise((resolve,reject)=>{
+    rec.resolve=resolve; rec.reject=reject;
+    rec.timer=setTimeout(()=>{ cancelWait(rec);
+      reject(new Error(`等待应答超时（cmd=0x${hx(cmd)} sub=0x${hx(sub)}）`)); },timeout);
+    S.waiters.push(rec);
+  });
+  /* 写帧失败时由调用方摘掉这个 waiter：否则它会一直挂到超时，
+     既产生一条无人接住的未捕获 rejection，又可能把迟到的应答吃掉，
+     让本轮重试必然再次超时（拔线场景必现）。 */
+  p.cancel=()=>cancelWait(rec);
+  return p;
+}
+const le16=v=>{const b=new Uint8Array(2);new DataView(b.buffer).setUint16(0,v,true);return b;};
+const le32=v=>{const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,v>>>0,true);return b;};
+const cat=(...a)=>{const n=a.reduce((x,y)=>x+y.length,0),o=new Uint8Array(n);let p=0;a.forEach(x=>{o.set(x,p);p+=x.length;});return o;};
+function updateConnUI(){
+  const on=S.connected;
+  $('#connChip').classList.toggle('on',on);
+  /* 顶栏只报连接状态与波特率。浏览器不提供 Windows 的 COM 号，
+     唯一能程序化拿到的只有 VID:PID（你机器上 COM16/COM18 还都是
+     FT232R 0403:6001，根本分不出是哪个口），显示它反而误导，
+     所以这里不再出现任何串口标识。 */
+  setT('#connText',on?('已连接 @'+$('#uBaud').value):'未连接');
+  const btn=$('#uConnToggle');
+  btn.className='btn btn-sm '+(on?'btn-danger':'btn-primary');
+  btn.innerHTML=on
+    ? '<svg><use href="#i-x"/></svg><span>断开</span>'
+    : '<svg><use href="#i-plug"/></svg><span>连接</span>';
+  btn.innerHTML=tr(btn.innerHTML);
+  refreshStartBtn();
+}
+
+/* =========================================================
+   漫游式引导
+   ------------------------------------------------------------
+   一步 = 一个选择器 + 标题 + 说明。目标元素滚动进视野后再量位置，
+   否则遮罩会停在旧坐标上（.main 是滚动容器，getBoundingClientRect 随滚动变）。
+   步骤按页面分组：引导层是全局单例，切页时收掉，因此进入某页的引导必须自带
+   该页要刷新一次的动态区域，否则目标可能还没渲染 / 数据已过期。
+   ========================================================= */
+const TOUR_SETS={
+  upgrade:[
+    {sel:'#uConnToggle',      title:'连接串口',   body:'在设备列表里挑对应的那个口（注意看括号里的 COM 号）。浏览器不会把 COM 号告诉网页，所以顶栏只显示已连接与波特率 —— 选哪个口要靠你自己认。'},
+    {sel:'#uImport',          title:'导入升级包', body:'选择固件制作页生成的 <code>.tcupd</code>。导入后卡片标题栏会显示台数、大小与包头校验结果。'},
+    {sel:'#uPkgMeta',         title:'确认包信息', body:'这里核对包内设备台数与包头校验。校验不通过时不要开始升级，否则设备会拒绝写入。'},
+    {sel:'#uContinue',        title:'失败策略',   body:'勾选后，某一台失败不会中断整轮，继续推送下一台；不勾选则第一台失败即中止。'},
+    {sel:'#uStart',           title:'开始整机升级', body:'按包内入口序号升序逐台推送。过程中可随时「中止」；每台写完后设备会复位重启 bootloader，工具按「设置」里的复位等待时间留出间隔。'},
+    {sel:'#uLogCard',         title:'交互日志',   body:'逐帧记录收发数据与每台设备的处理结果，可暂停滚动或导出为 txt。勾选「自动保存」后每满 2000 条自动写入所选目录的 logs 子文件夹并清空当前日志。升级出问题先看这里。'},
+  ],
+  builder:[
+    {sel:'#mkRows',           title:'按设备录入', body:'每行是一块板子：填设备号、版本号，选好 <code>.bin</code> 源文件，再勾上「升级」表示这行参与合成。没有源文件的行不会被写进升级包。'},
+    {sel:'#mkRows .mk-row:nth-child(1) [data-act="devnum"]', title:'设备号与版本号', body:'设备号必须与实物一致，空着会被写成 00 00 00 00，设备不认。版本号只填数字：112 就是 112，不要写成 1.12。'},
+    {sel:'#mkRows .mk-row:nth-child(1) [data-act="pick"]',   title:'选源文件',   body:'点「选择文件」载入 <code>.bin</code>。载入后这格会显示包数与 sum16 校验，超出大小限制会标红。'},
+    {sel:'#mkRows .mk-row:nth-child(1) .mk-info',            title:'入口序号',   body:'决定推固件时的先后顺序。双击这格可改序号（0–7）；实测厂商包为 DC=0、PCS=1、EMS=6、BMS=7，与实际不符时在此修正。'},
+    {sel:'#bFileName',        title:'输出文件名',  body:'默认按 Tps_日期时间 命名，名字可以随意修改；想恢复自动名就取消勾选后再勾上。文件保存到浏览器下载目录。'},
+    {sel:'#bGen',             title:'生成文件',    body:'勾选行、填好字段后生成 <code>.tcupd</code>：256 字节包头 + 各设备载荷，按设备号去重。下方提示行会告诉你还缺什么。'},
+  ],
+};
+let tourI=-1, tourPage=null;
+function tourSteps(){ return TOUR_SETS[tourPage]||[]; }
+function tourStep(){ return tourSteps()[tourI]; }
+/* 目标可能在视口外：先滚进视野，等一帧再量，否则洞会落在旧位置 */
+function tourFocus(sel,cb){
+  const el=$(sel);
+  if(!el){ cb(null); return; }
+  /* 目标此刻还不可见（整机升级第 3 步锚的 #uPkgMeta，没导入包时带 hidden）：
+     getBoundingClientRect 全是 0，一定会被下面的「在视口外」判定捞走，
+     白等 320ms 还滚了个寂寞。直接交给 tourPlace 处理。 */
+  if(!el.offsetParent&&el.offsetWidth===0){ cb(el); return; }
+  const r=el.getBoundingClientRect();
+  const need=r.top<8||r.bottom>innerHeight-8||r.left<8||r.right>innerWidth-8;
+  if(need) el.scrollIntoView({block:'center',behavior:'smooth'});
+  const go=()=>cb(el);
+  need?setTimeout(go,320):requestAnimationFrame(go);
+}
+/* 目标不可见时往上退一级，找第一个能看见的祖先。
+   整机升级第 3 步要指的 #uPkgMeta 藏在 .card-head 里，退到卡头也说得通 ——
+   「包信息就是出现在这一块」。退到 document.body 仍不可见就返回 null。 */
+function tourAnchor(el){
+  let e=el;
+  while(e&&e!==document.body&&!e.offsetParent&&e.offsetWidth===0) e=e.parentElement;
+  return (e&&e!==document.body)?e:null;
+}
+function tourPlace(el){
+  const ring=$('#tourRing'), pop=$('#tourPop'), sh=$$('[data-tour-shade]');
+  const anchor=tourAnchor(el);
+  /* 目标此刻不存在或不可见时，**绝不关掉引导**。
+     原来这里是 tourHide()：整机升级第 3 步锚的 #uPkgMeta 在没导入包时带 hidden，
+     于是点「下一步」走到第 3 步整段引导当场消失 —— 而且是在用户还没看到
+     失败策略、开始升级、交互日志这三步之前就没了，是最莫名其妙的一种消失。
+     现在退化成两级兜底：
+       1) 洞套到可见祖先上（上面 tourAnchor）；
+       2) 连祖先都不可见就收掉描边和遮罩，只把气泡居中摆出来。
+     文案照读，一路能走到第 6 步。目标之后出现的话（比如用户当场导入了包），
+     下一步自然会重新把洞套回去。 */
+  if(!anchor){
+    ring.style.display='none';
+    sh.forEach(s=>{ s.style.display='none'; });
+    const M=12, pw=pop.offsetWidth||340, ph=pop.offsetHeight||180;
+    pop.style.left=clamp((innerWidth -pw)/2,M,Math.max(M,innerWidth -pw-M))+'px';
+    pop.style.top =clamp((innerHeight-ph)/2,M,Math.max(M,innerHeight-ph-M))+'px';
+    return;
+  }
+  ring.style.display='';
+  sh.forEach(s=>{ s.style.display=''; });
+  const r=anchor.getBoundingClientRect();
+  const P=6;                                   /* 描边外扩一点，别贴死在按钮边缘 */
+  const x=r.left-P, y=r.top-P, w=r.width+P*2, h=r.height+P*2;
+  ring.style.left=x+'px'; ring.style.top=y+'px'; ring.style.width=w+'px'; ring.style.height=h+'px';
+  ring.style.borderRadius=getComputedStyle(anchor).borderRadius;
+  /* 遮罩四块：上/下/左/右围出中间的目标洞。
+     刻意不给 .tour-shade 加 transition —— 有了过渡，切换步骤时四块各自缓动，
+     过渡帧里相邻块对不齐，接缝处会闪出一条白/灰线。定位是瞬时的，
+     视觉上的柔和感由描边环与气泡的缓动承担，两者互不牵连。 */
+  const vw=innerWidth, vh=innerHeight, M=12;
+  const set=(k,l,t,ww,hh)=>{ const s=sh.find(e=>e.dataset.tourShade===k); if(!s) return;
+    s.style.left=l+'px'; s.style.top=t+'px'; s.style.width=ww+'px'; s.style.height=hh+'px'; };
+  set('t',0,0,vw,Math.max(0,y));
+  set('b',0,y+h,vw,Math.max(0,vh-(y+h)));
+  set('l',0,Math.max(0,y),Math.max(0,x),Math.min(h,vh));
+  set('r',x+w,Math.max(0,y),Math.max(0,vw-(x+w)),Math.min(h,vh));
+  /* 气泡优先放在目标下方；下方放不下就翻到上方，仍不够再压回下方并夹在视口内 */
+  const pw=pop.offsetWidth||340, ph=pop.offsetHeight||180;
+  let px=clamp(x, M, vw-pw-M);
+  let py=y+h+14;
+  if(py+ph>vh-M) py=y-ph-14;
+  py=clamp(py, M, Math.max(M, vh-ph-M));
+  pop.style.left=px+'px'; pop.style.top=py+'px';
+}
+function tourRender(){
+  const st=tourStep(); if(!st) return;
+  const list=tourSteps(), n=list.length;
+  $('#tourIdx').textContent=`${tourI+1}/${n}`;
+  $('#tourTitle').textContent=tr(st.title);
+  $('#tourBody').innerHTML=tr(st.body).replace(/&lt;code&gt;/g,'<code>').replace(/&lt;\/code&gt;/g,'</code>');
+  $('#tourPrev').disabled=tourI===0;
+  $('#tourNext').textContent=tr(tourI===n-1?'完成':'下一步');
+  $('#tourDots').innerHTML=list.map((_,i)=>`<i class="${i<=tourI?'on':''}"></i>`).join('');
+  $('#tourSkip').textContent=tr('跳过');
+  $('#tourPrev').textContent=tr('上一步');
+  tourFocus(st.sel,el=>tourPlace(el));
+}
+/* 刷新当前页的动态区域再定位：制作页的行是 renderMkRows 重画出来的，
+   不先刷一次，#mkRows 里的行可能还没建好，洞会套在空气上。 */
+const TOUR_REFRESH={upgrade:()=>{renderBuilder();renderEnvRows();}, builder:()=>renderBuilder()};
+function tourStart(page,i=0){
+  const list=TOUR_SETS[page]; if(!list||!list.length) return;
+  tourPage=page; tourI=i; $('#tour').hidden=false;
+  (TOUR_REFRESH[page]||(()=>{}))();
+  tourRender();
+}
+function tourHide(){
+  tourI=-1; tourPage=null;
+  const t=$('#tour'); if(t) t.hidden=true;
+}
+function tourGo(d){
+  const n=tourI+d;
+  if(n<0) return;
+  if(n>=tourSteps().length){ tourHide(); return; }
+  tourI=n; tourRender();
+}
+/* =========================================================
+   制作页渲染
+   ========================================================= */
+function renderMkRows(){
+  const box=$('#mkRows'); box.innerHTML='';
+  for(const s of STATE.slots){
+    const meta=SLOT_BY_KEY[s.key];
+    s.version=normVersion(s.version);   /* 旧存档里的 "1.12" 渲染时顺带收成 112 */
+    const row=document.createElement('div');
+    row.className='mk-row'+(s.enabled?' on':'');
+    const size=s.data?s.data.length:0;
+    const within=s.data?(meta.op==='<'?size<meta.limit:size<=meta.limit):true;
+    row.innerHTML=`
+      <input class="input mono" data-act="devnum" maxlength="4" value="${esc(s.devnum||'')}" placeholder="${tr(s.devnum||'4 字节')}">
+      <input class="input mono" data-act="version" maxlength="12" inputmode="numeric" value="${esc(s.version||'')}" placeholder="100">
+      <div class="mk-file">
+        <span class="fn ${s.data?'':'empty'}">${s.data?esc(s.fileName):tr('未选择源文件')}</span>
+        <button class="btn btn-sm" data-act="pick"><svg><use href="#i-up"/></svg>${tr('选择文件')}</button>
+      </div>
+      <div class="mk-info">${s.data
+        ? `<b>${Math.ceil(size/128)}</b> ${tr('包')}<br>sum 0x${hx2(s.sum)}<br><span class="${within?'':'bad'}">${size} B</span>`
+        : `${tr('入口')} ${s.idx}<span class="mk-entry">${tr('可改 0–7')}</span>`}</div>
+      <div>
+        <label class="check"><input type="checkbox" data-act="enable" ${s.enabled?'checked':''}><span><b class="mk-code">${esc(meta.name)}</b> ${tr('升级')}</span></label>
+        <span class="mk-entry">${tr('入口')} ${s.idx} · cmd 0x${hx(meta.cmd)}</span>
+      </div>`;
+    row.querySelector('[data-act="pick"]').addEventListener('click',()=>pickBin(s.key));
+    /* saveCfgSoon 而非 saveCfg：localStorage 是同步阻塞写，
+       挂在 input 上等于每敲一个字符就落一次盘。离开页面时 beforeunload 会兜底落盘。 */
+    row.querySelector('[data-act="devnum"]').addEventListener('input',e=>{s.devnum=e.target.value;saveCfgSoon();});
+    row.querySelector('[data-act="version"]').addEventListener('input',e=>{
+      /* 打字过程中不改写 input.value —— 那会打乱光标、吞掉后续字符。
+         这里只把归一化后的纯数字存进 state，写进包头的字节始终是干净的；
+         失焦 / 回车时再回写显示（change 事件）。 */
+      s.touched=true;
+      s.version=normVersion(e.target.value); saveCfgSoon(); renderBuilderMeta();
+    });
+    row.querySelector('[data-act="version"]').addEventListener('change',e=>{
+      const t=normVersion(e.target.value);
+      if(e.target.value!==t) e.target.value=t;
+      s.touched=true; s.version=t; saveCfgSoon(); renderBuilderMeta();
+    });
+    row.querySelector('[data-act="enable"]').addEventListener('change',e=>{
+      s.enabled=e.target.checked;
+      if(s.enabled&&!s.data) toast(`${meta.name}：还没有源文件，请先「选择文件」`,'err');
+      renderBuilder();
+    });
+    /* 入口序号修改：双击信息格 */
+    row.querySelector('.mk-info').addEventListener('dblclick',()=>{
+      const v=prompt(tr(`修改「${meta.name}」的入口序号（0–7）\n当前：${s.idx}\n\n提示：厂商包实测 DC=0 PCS=1 EMS=6 BMS=7；若与实际包不符可在此改。`),
+        String(s.idx));
+      if(v===null) return;
+      const n=parseInt(v,10);
+      if(!Number.isInteger(n)||n<0||n>7){ toast('入口序号需为 0–7','err'); return; }
+      s.idx=n; saveCfg(); renderBuilder();
+    });
+    box.appendChild(row);
+  }
+}
+function pickBin(key){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='.bin,.hex,.axf';
+  inp.onchange=()=>{ const f=inp.files[0]; if(f) loadBin(key,f); };
+  inp.click();
+}
+function loadBin(key,f){
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const buf=new Uint8Array(rd.result);
+    const s=STATE.slots.find(x=>x.key===key);
+    const meta=SLOT_BY_KEY[key];
+    /* sum/xor 只在这里算一次，之后组包与清单都直接读缓存 */
+    s.data=buf; s.sum=sum16(buf); s.xor=xor8(buf); s.fileName=f.name; s.enabled=true;
+    /* 版本号仍停留在默认/空值、且用户没手改过，才按文件名猜（V210 / V1_06_01） */
+    if(!s.touched) autoGuessVersion(s,f.name);
+    renderBuilder();
+    const within=meta.op==='<'?buf.length<meta.limit:buf.length<=meta.limit;
+    toast(`${meta.name} 已载入 ${fmtSize(buf.length)}`+(within?'':' · 超出大小限制'), within?'ok':'err');
+  };
+  rd.readAsArrayBuffer(f);
+}
+function autoGuessVersion(s,fname){
+  /* V210 / V2.11 / V1_06_01 —— 取版本数字段并剥掉分隔点，避开日期尾巴 */
+  const m=String(fname).match(/[vV](\d+(?:[._]\d+)*)/);
+  if(m) s.version=normVersion(m[1]);
+}
+
+/* 结构变更时重建整表；仅派生信息变化时只刷新清单，避免输入框失焦 */
+function renderBuilder(){ renderMkRows(); renderBuilderMeta(); }
+
+/* 已勾选但字段不全的设备：设备号/版本号为空都会静默写成 00，
+   生成的包看着正常、下发时设备却不认。这里统一算一遍，
+   点击「生成文件」拦截和按钮旁的提示行共用同一份结果。 */
+function builderGaps(){
+  return activeSlots().map(s=>{
+    const miss=[];
+    if(!(s.devnum||'').trim()) miss.push('设备号');
+    if(parseVersion(s.version)==null) miss.push('版本号');
+    return miss.length?{name:SLOT_BY_KEY[s.key].name,miss}:null;
+  }).filter(Boolean);
+}
+
+function renderBuilderMeta(){
+  const res=calcMeta();   /* 只取长度/devmap/冲突信息，不组包 */
+  const act=activeSlots();
+  /* 「生成文件」常驻可点：无内容 / 入口冲突 / 字段缺失都交给 generateFile 弹提示。
+     早期版本靠 disabled 把原因藏起来，但 disabled 不给理由，用户只能干瞪眼。 */
+  if(!act.length){
+    setT('#bGenHint','勾选设备后生成 256 字节包头并拼接载荷');
+    return;
+  }
+  if(!res.ok){
+    setT('#bGenHint',res.msg);
+    return;
+  }
+  const gaps=builderGaps();
+  if(gaps.length){
+    setT('#bGenHint',`请先补全 ${gaps.map(g=>`${g.name}（${g.miss.join('、')}）`).join('、')}`);
+    return;
+  }
+  setT('#bGenHint',`将生成 256 字节包头 + ${fmtSize(res.payloadLen)} 载荷 = ${fmtSize(res.total)} → ${getFileName()}`);
+}
+/* 包头预览渲染成图片式表格：列头 + 等宽字节格 + ASCII 列。
+   全 0 的行打 .zero 压暗 —— 包头 256 字节里绝大多数是未用区，
+   不压暗的话真正有内容的几行会被淹没。 */
+function renderHexHeader(bytes,target){
+  const box=$(target||'#pHexDump'); if(!box) return;
+  const hcols=[];
+  for(let i=0;i<16;i++) hcols.push(`<th class="byte">${hx(i)}</th>`);
+  hcols.splice(8,0,'<th class="gap"></th>');
+  hcols.push('<th class="asc">ASCII</th>');
+
+  const rows=[];
+  for(let off=0;off<HEAD_SIZE;off+=16){
+    const row=bytes.slice(off,off+16);
+    let allZero=true;
+    for(let i=0;i<16;i++) if(row[i]){ allZero=false; break; }
+    let cells='',asc='';
+    for(let i=0;i<16;i++){
+      const p=off+i; let cls='byte';
+      if(p<5)cls+=' mg';
+      else if(p>=5&&p<9)cls+=' mi';
+      else if(p===DEVMAP_OFF)cls+=' mg';
+      else if(p>=ENTRY_BASE&&p<ENTRY_BASE+112){
+        const rel=(p-ENTRY_BASE)%ENTRY_SIZE, eidx=Math.floor((p-ENTRY_BASE)/ENTRY_SIZE);
+        cls+=' '+(IDX_INFO[eidx]?((rel<4)?'mg':(rel<8)?'mi':'mw'):'');
+      } else if(p>=TOTAL_OFF)cls+=' mr';
+      cells+=`<td class="${cls}">${hx(row[i])}</td>`;
+      if(i===7) cells+='<td class="gap"></td>';
+      asc+=printable(row[i]);
+    }
+    rows.push(`<tr class="${allZero?'zero':''}"><td class="lead">${hx(off,4)}</td>${cells}<td class="asc">${esc(asc)}</td></tr>`);
+  }
+  box.innerHTML=`<table><thead><tr><th class="lead">地址</th>${hcols.join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+}
+/* 名字一律以输入框里的内容为准。
+   以前勾着「自动生成」时直接返回新算的 autoFileName()，输入框里改过的东西会被悄悄丢掉；
+   现在勾选只负责「按规则重填一次」，改完名字照常生效。 */
+function getFileName(){
+  const n=($('#bFileName').value||'').trim();
+  return n||autoFileName();
+}
+function download(bytes,name){
+  const url=URL.createObjectURL(new Blob([bytes],{type:'application/octet-stream'}));
+  const a=document.createElement('a'); a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+function generateFile(){
+  const res=buildPackage();
+  if(!res.ok){ toast(res.msg,'err'); return; }
+  /* 设备号 / 版本号为空（或版本号越界）都会静默写成 00，
+     生成出来的包看着正常、下发时设备却认不出来。
+     所以这里一律拦下来让人补，而不是生成完再补一句提醒。 */
+  const gaps=builderGaps();
+  if(gaps.length){
+    const list=gaps.map(g=>`${g.name}（${g.miss.join('、')}）`).join('、');
+    logU('err',`[fail] 已阻止生成：${list} 未填写`);
+    toast('请先补全 '+list,'err');
+    return;
+  }
+  const name=getFileName();
+  download(res.bytes,name);
+  logU('ok',`[success] 已生成 ${name}　${fmtSize(res.total)}　devmap=0x${hx(res.devmap)}　包头校验=0x${hx2(res.headerCrc)}`);
+  toast('已生成 '+name,'ok');
+}
+
+/* =========================================================
+   升级页
+   ========================================================= */
+/* 整机进度：全卡片唯一的百分比与进度条。
+   mode：'wait' 等待中 / 'ok' 正常完成 / 'err' 失败；pct 传 null 走不确定态（中断）。 */
+function setProgress(pct,mode){
+  const f=$('#uFill'),box=$('#uPct');
+  f.classList.toggle('wait',mode==='wait');
+  f.classList.toggle('err',mode==='err');
+  box.className='ux-pct'+(mode==='ok'?' ok':mode==='err'?' err':mode==='wait'?' wait':'');
+  if(pct==null){ f.classList.add('indet'); $('#uPctNum').textContent='\u00b7\u00b7\u00b7'; }
+  else{ f.classList.remove('indet'); f.style.width=clamp(pct,0,100)+'%'; $('#uPctNum').textContent=Math.round(pct); }
+}
+/* 当前固件区。dev 传设备对象时自动拆出板名 / 设备号 / 目标版本；
+   传字符串（空闲、收尾态）时整串当板名用。 */
+function setCur(dev,sub,state,cls){
+  let name='\u2014',dn='',ver='',hasVer=false;
+  if(dev&&typeof dev==='object'){
+    name=dev.name||'\u2014'; dn=dev.devnum||'';
+    /* 先判有效性再格式化：fmtVersion('') 返回 'V'（空串既非 null 也非 0），
+       直接用会渲染出一个只有字母 V 的空壳 chip。 */
+    if(parseVersion(dev.version)!=null){ ver=fmtVersion(dev.version); hasVer=true; }
+  }
+  else if(typeof dev==='string') name=dev;
+  setT('#uCurName',name);
+  $('#uCurDev').textContent=dn; $('#uCurDevBox').hidden=!dn;
+  $('#uCurVer').textContent=ver; $('#uCurVerBox').hidden=!hasVer;
+  setT('#uCurSub',sub||'\u2014');
+  const st=$('#uCurState');
+  if(state){ st.hidden=false; st.className='ux-state '+(cls||''); st.textContent=tr(state); st.__zh=state; }
+  else st.hidden=true;
+}
+function setNext(dev,step){
+  setT('#uNextDev',dev||'\u2014');
+  setT('#uNextStep',step||'\u2014');
+}
+/* 导入成功后立刻把第一台待升级固件填进「当前固件」区。
+   否则导入完看到的仍是「等待导入升级包」，要等点了「开始整机升级」才知道
+   第一个要刷的是哪一版 —— 而「动手前先确认刷什么」恰恰是最该看到的信息。 */
+function showPendingFirmware(){
+  const list=pkgEntries();
+  if(!list.length){
+    STATE.upTotal=0; STATE.upDone=0;
+    segBegin(0); setOverMeta(''); setDevMeta(''); setRes(null); setProgress(0);
+    setT('#uCurTag','当前固件');
+    $('#uNextRow').hidden=true;
+    setCur('等待导入升级包',STATE.pkg?'包内没有可升级的固件':'导入后这里会显示正在刷哪一版固件');
+    return;
+  }
+  const total=list.reduce((a,e)=>a+e.data.length,0);
+  STATE.upTotal=total; STATE.upDone=0;
+  setRes(null);
+  segBegin(list.length); segEnter(0);
+  setOverMeta(`待升级 ${list.length} 台　0 / ${fmtSize(total)}`);
+  setProgress(0);
+  setT('#uCurTag','当前固件');
+  const f=list[0];
+  setCur(f,`入口 ${f.index} · cmd 0x${hx(f.cmd)} · 待开始`,'待开始','idle');
+  setDevMeta(`${Math.ceil(f.data.length/128)} 包 · ${fmtSize(f.data.length)}`);
+  const nx=list[1];
+  $('#uNextRow').hidden=false;
+  setNext(nx?`${nx.name} ${nx.devnum}`:'（无）',nx?'本台完成后开始':'最后一台');
+}
+function setDevMeta(txt){ setT('#uDevMeta',txt||''); }
+function setOverMeta(txt){ setT('#uOverMeta',txt||''); }
+/* 结束态结果条。存 __raw 供切语言重画，避免对已翻译文本二次翻译。 */
+function setRes(items){
+  const box=$('#uResRow'); if(!box) return;
+  box.__raw=items||null; renderRes();
+}
+function renderRes(){
+  const box=$('#uResRow'); if(!box) return;
+  const items=box.__raw;
+  if(!items||!items.length){ box.hidden=true; box.innerHTML=''; return; }
+  box.hidden=false;
+  box.innerHTML=items.map(([k,v,c])=>`<span class="ux-chip ${c||''}">${esc(tr(k))} <b>${esc(tr(v))}</b></span>`).join('');
+}
+/* 分段块：每台一个小方块 —— 绿=成功 红=失败 蓝=当前（块内按本台进度填充）灰=未开始。
+   它同时表达「第几台」与「本台进度」，所以本台不必再单列一个百分比：
+   两个分母不同的百分比并排显示，用户分不清哪个是整台、哪个是本台。 */
+function renderSegs(){
+  const box=$('#uSegs'); if(!box) return;
+  const list=STATE.segList||[]; let html='';
+  for(let i=0;i<list.length;i++){
+    const st=list[i]||'';
+    const cur=(i===STATE.segCur)&&!st;
+    html+=`<span class="ux-seg ${st||(cur?'cur':'')}">${cur?`<i style="width:${Math.round((STATE.segPct||0)*100)}%"></i>`:''}</span>`;
+  }
+  box.innerHTML=html;
+}
+function segBegin(n){ STATE.segList=Array.from({length:n},()=>''); STATE.segCur=-1; STATE.segPct=0; renderSegs(); }
+function segEnter(i){ STATE.segCur=i; STATE.segPct=0; renderSegs(); }
+function segPct(p){ STATE.segPct=p; renderSegs(); }
+function segLeave(i,ok){ STATE.segList[i]=ok?'ok':'err'; renderSegs(); }
+/* 逐包进度刷新在 115200bps 下约 85 次/秒，每次要写 3~4 处 DOM
+   （进度条宽度 + 百分比 + 描述 + 5 个统计格的 innerHTML 重建）。
+   人眼看不出 85Hz 和 12Hz 的差别，却足以把主线程占满、拖垮整页交互。
+   这里限流到约 12Hz；force=true 用于收尾与阶段切换，保证终态不丢。 */
+let progPaintAt=0;
+function shouldPaint(force){
+  const now=performance.now();
+  if(force||now-progPaintAt>=80){ progPaintAt=now; return true; }
+  return false;
+}
+/* 升级页已不再渲染勾选框（见 renderPkgList 上方注释），所以参与集合恒等于包内清单。
+   仍保留独立函数，是为了把「参与升级的集合」与「包内清单」在语义上分开，
+   将来若恢复勾选能力，只需要改这一处。 */
+function selectedPkgEntries(){ return pkgEntries(); }
+/* 只列出包内实际存在的固件（devmap 置位且 filesize>0） */
+function pkgEntries(){
+  return STATE.pkg?STATE.pkg.entries.filter(e=>e.data&&e.data.length).sort((a,b)=>a.index-b.index):[];
+}
+
+/* 「开始整机升级」默认可点击：只在升级进行中禁用。
+   未连接串口 / 未导入包等前置条件，点击后由 runPackageUpgrade 弹提示，而不是提前灰掉按钮。 */
+function refreshStartBtn(){
+  $('#uStart').disabled=!!STATE.running;
+}
+/* 升级页默认全选：不再渲染勾选框 / 全选按钮 / 详情折叠，
+   包信息只压缩成卡片标题栏的一行，设备逐台明细交给日志与制作页的包头预览。 */
+function renderPkgList(){
+  const pkg=STATE.pkg;
+  const enabled=pkgEntries();
+  const allOk=pkg.okHeader&&pkg.okTotal&&pkg.okLength&&enabled.every(e=>e.okSum&&e.okXor);
+  const m=$('#uPkgMeta');
+  /* 版本不再进标题栏：「现在要刷的是哪一版」由进度卡的当前固件区大字承担，
+     标题栏再罗列一次既重复、又看不出哪个版本对应哪台。 */
+  const raw=`${enabled.length} 台 · ${fmtSize(pkg.fileSize)} · 包头校验${pkg.okHeader?'[success]':'[fail]'}`;
+  m.textContent=tr(raw);
+  m.__raw=raw;
+  m.hidden=false;
+  m.title=tr(`${STATE.pkgName||'—'}　${raw}`);
+  m.style.color=allOk?'':'var(--warn)';
+  const h=$('#uSlotHint');
+  h.__raw=fmtSlotOrder(enabled);
+  h.textContent=tr(h.__raw); h.title=h.textContent;
+  refreshStartBtn();
+}
+/* 每台设备的「包内版本 → 升级后实测版本」，升级完成时写进统计行 */
+function verCell(e){
+  const want=fmtVersion(e.version);
+  if(e.verSkipped) return `${want} → 不校验`;
+  if(e.actualVersion==null) return `${want} → 未回读`;
+  return `${want} → ${fmtVersion(e.actualVersion)}${e.versionVerified?'':'（未确认）'}`;
+}
+function fmtSlotOrder(list){
+  return list.length?`按入口顺序：${list.map(e=>SLOT_BY_KEY[e.key]?SLOT_BY_KEY[e.key].name:e.name).join(' → ')}`:'包内没有待升级设备';
+}
+/* ---------- 升级核心 ---------- */
+async function sendUpgrade(cmd,payload,expectSub,retry){
+  const timeout=parseInt($('#uTimeout').value,10)||1500;
+  const rt=retry!=null?retry:parseInt($('#uRetry').value,10);
+  const addr=parseInt(($('#uAddr').value||'0').replace(/[^0-9a-fA-F]/g,''),16)||0;
+  let last=null;
+  for(let a=0;a<=rt;a++){
+    if(STATE.abort) throw new Error('已中止');
+    /* waiter 必须先挂再发：设备秒回应答时必须已经有人在听。
+       但写帧可能抛错（拔线 / writer 已释放），此时 w 再也没人 await，
+       必须立刻 cancel，否则就是上面注释里说的孤儿 waiter。 */
+    const w=waitFrame(cmd,expectSub==null?-1:expectSub,timeout);
+    try{
+      await writeFrame(cmd,payload,addr);
+      return await w;
+    }catch(err){
+      w.cancel();
+      last=err;
+      if(STATE.abort) throw new Error('已中止');
+      if(a===rt) throw err;
+      logU('warn',`[warn] sub 0x${hx(expectSub)} 第 ${a+1} 次无应答，重试…`);
+      await sleep(60);
+    }
+  }
+  throw last||new Error('通信失败');
+}
+function assertOk(r,what){
+  if(r.ack===0) return;
+  if(r.ack>=2) throw new Error(`${what} 设备返回错误 ack=${r.ack}（${UP_ERR[r.ack]||'未知错误'}）`);
+  throw new Error(`${what} 应答 ack=${r.ack}，非 0`);
+}
+
+/* 单台设备升级 */
+/* 单台设备升级。ctx: {base,span,tailBytes,doneBytes} —— tailBytes 含本台及后续全部待传字节 */
+async function upgradeOne(dev,ctx,t0){
+  const base=ctx.base, span=ctx.span;
+  const size=dev.data.length;
+  const packCount=Math.ceil(size/128);
+  const crc=sum16(dev.data);
+  /* 收尾阶段等待设备上报也要用 ACK 超时。
+     此前这里引用了一个本函数内并不存在的 timeout（它只在 sendUpgrade 里声明），
+     strict 模式下直接抛 ReferenceError，又被下面的 catch 当成「没收到上报」处理，
+     结果协议里的设备侧成功/失败校验从来没有真正跑过 —— 设备回报失败也算成功。 */
+  const timeout=parseInt($('#uTimeout').value,10)||1500;
+  const slot=SLOT_BY_KEY[dev.key];
+  const limit=slot?slot.limit:0x19000, op=slot?slot.op:'<=';
+  const within=op==='<'?size<limit:size<=limit;
+  if(!within) throw new Error(`固件 ${size} B 超出该设备上限（${slot.limitTxt}），设备会返回 UP_ERR_ALL_SIZE`);
+  if(!dev.cmd) throw new Error('该入口没有已知升级命令字，已跳过');
+
+  const P=p=>base+span*clamp(p,0,1);
+  segEnter(dev.slotNo-1);
+  setOverMeta(`第 ${dev.slotNo} / ${dev.slotTotal} 台`);
+  setCur(dev,'校验设备号…','校验中'); setProgress(P(0));
+  const r1=await sendUpgrade(dev.cmd,cat(new Uint8Array([1]),devnumBytes(dev.devnum)),1);
+  assertOk(r1,'设备号校验');
+  logU('ok',`设备号校验 设备=${dev.devnum} 结果=通过`);
+
+  setCur(dev,'下发参数…','下发中');
+  const r2=await sendUpgrade(dev.cmd,cat(new Uint8Array([2]),le16(packCount)),2);
+  assertOk(r2,'包数下发');
+  const r3=await sendUpgrade(dev.cmd,cat(new Uint8Array([3]),le32(size)),3);
+  assertOk(r3,'长度下发');
+  logU('info',`参数下发 包数=${packCount} 字节=${size} sum16=0x${hx2(crc)}`);
+
+  let sent=0,lastLog=0;
+  for(let i=0;i<packCount;i++){
+    if(STATE.abort) throw new Error('已中止');
+    /* subarray 是视图、不拷贝；slice 每包都要新建一个数组，
+   四台设备一轮下来近两千次无谓分配。cat() 本来就会把 chunk 拷进帧里。 */
+const chunk=dev.data.subarray(i*128,Math.min(size,(i+1)*128));
+    const r=await sendUpgrade(dev.cmd,cat(new Uint8Array([5]),le16(i+1),chunk),5);
+    if(r.ack!==0) throw new Error(`第 ${i+1} 包应答 ack=${r.ack}`);
+    sent++;
+    const el=(performance.now()-t0)/1000;
+    const kbs=(sent*128/1024)/Math.max(.001,el);
+    const eta=(packCount-sent)/Math.max(.001,sent/el);
+    const pct=sent/packCount;
+    const leftAll=Math.max(0,ctx.tailBytes-sent*128);        // 含本台剩余与后续全部
+    const rate=Math.max(.001,(ctx.doneBytes+sent*128)/1024/el);
+    /* 最后一包 force 刷新，保证进度条不会停在 99% */
+    if(shouldPaint(sent===packCount)){
+      setProgress(P(pct));
+      segPct(pct);
+      setCur(dev,`传输 ${sent}/${packCount} 包　已发送 ${fmtSize(sent*128)}　速率 ${kbs.toFixed(1)} KB/s`,'传输中');
+      setOverMeta(`第 ${dev.slotNo} / ${dev.slotTotal} 台　${fmtSize(ctx.doneBytes+sent*128)} / ${fmtSize(STATE.upTotal)}`);
+      setDevMeta(`${sent} / ${packCount} 包　本台剩余 ${eta.toFixed(0)} s　整机剩余约 ${fmtEta(leftAll/1024/rate)}`);
+    }
+    /* 包号逐包刷新，但事件循环让位仍按低频做：
+       sleep(0) 是 setTimeout(0)，嵌套 5 层后被浏览器钳到 4ms，
+       逐包调用会平白给串口传输加上几百毫秒延迟。 */
+    if(sent%8===0) await sleep(0);
+    if(sent-lastLog>=100){ lastLog=sent; logU('info',`传输进度 设备=${dev.name} 包号=${sent}/${packCount} 百分比=${Math.round(sent/packCount*100)}`); }
+  }
+  logU('ok',`数据传输完成 设备=${dev.name} 包数=${packCount} 字节=${size}`);
+
+  /* 总校验（sub=4）只对 EMS 主控有意义。
+     BMS / 逆变器 / 充电板的固件只是先下载到本板 flash，
+     之后还要由本板转发给下游从机写入 —— 此刻 flash 里的内容与
+     「从机已升级成功」没有对应关系，回一个 CRC 一致也说明不了任何事，
+     反而会因下游未写完而误报失败。因此这三类板子跳过总校验。 */
+  if(CRC_CHECK_KEYS.has(dev.key)){
+    setCur(dev,'总校验…','校验中');
+    const r4=await sendUpgrade(dev.cmd,cat(new Uint8Array([4]),le16(crc)),4);
+    assertOk(r4,'CRC 校验');
+    logU('ok',`总校验 设备=${dev.name} CRC=0x${hx2(crc)} 结果=通过`);
+  }else{
+    setCur(dev,'固件已写入本板 flash，设备即将复位','写入完成','ok');
+    logU('info',`  ${dev.name} 固件已下载到本板 flash，下游从机由本板负责转发，跳过 CRC 总校验`);
+    logU('ok',`固件已写入 设备=${dev.name} CRC总校验=跳过`);
+  }
+
+  /* 协议 V7.1 3.21-6：升级状态由设备主动上报（不是上位机轮询）。
+     注意此处标志语义与其余子命令相反 —— 其余应答标志 0=成功，本项升级标志 1=成功。 */
+  setCur(dev,'等待设备上报升级状态…','等待中','wait'); setProgress(P(1),'wait');
+  let status=null;
+  try{ status=await waitFrame(dev.cmd,6,Math.max(2500,timeout)); }
+  catch(e){ logU('warn','  未收到设备状态上报（设备已复位），按 CRC 一致判定为成功'); }
+  if(status){
+    logU(status.ack===1?'ok':'err',`  设备上报升级状态：升级标志=${status.ack}（1 成功 / 0 失败）`);
+    if(status.ack!==1) throw new Error(`设备上报升级失败（升级标志=${status.ack}）`);
+  }
+  return true;
+}
+/* 复位后回读软件版本，确认固件真的生效了。
+   CRC 一致只说明「包完整送达」，flash 写坏、bootloader 没跳回应用、
+   设备号与版本错配等情况都能通过 CRC；只有回读到新版本才算闭环。
+   设备不响应时按 warn 处理、不判失败 —— 协议里没有「版本查询」的错误码，
+   拿「没答话」当失败会把整轮升级误判成全挂。 */
+async function verifyVersionAfterReset(dev,waitSec){
+  /* 复位等待只有 EMS 需要：它的固件写完由本板 bootloader 切到新应用，
+     紧接着回读版本必须等它重启完成。DC / PCS / BMS 三类上位机只负责把包
+     下载到本板 flash，转发给下游从机是设备自己的排期，下一包直接发给下一台
+     即可 —— 空等只会白白拉长一轮升级。
+     这里的等待有两个用途：等设备重启回 bootloader，以及给回读留出余量。
+     两者都不成立时（本轮只有非 EMS 设备）就直接返回，不空等。 */
+  if(!VER_CHECK_KEYS.has(dev.key)){
+    dev.verSkipped=true; dev.actualVersion=null; dev.versionVerified=false;
+    /* 这里不 setCur 会让卡片停在 upgradeOne 最后那句「等待设备上报升级状态…」上，
+       而那一步其实已经完成了。补一个终态再走。 */
+    setCur(dev,'固件已写入本板 flash，转发由设备负责','写入完成','ok');
+    logU('info',`  ${dev.name} 不复位、不回读版本：固件需由本板转发给下游从机，版本号暂不变`);
+    return false;
+  }
+  const wait=Math.max(waitSec,3);
+  const tag='复位后校验版本';
+  setCur(dev,`${tag}　${wait} s`,'复位等待','wait');
+  logU('info',`  等待 ${wait} s 后回读 ${dev.name} 版本…`);
+  for(let s=wait;s>0;s--){
+    if(STATE.abort) throw new Error('已中止');
+    setCur(dev,`${tag}　剩余 ${s} s`,'复位等待','wait');
+    await sleep(1000);
+  }
+  const addr=parseInt(($('#uAddr').value||'0').replace(/[^0-9a-fA-F]/g,''),16)||0;
+  const timeout=Math.max(2500,parseInt($('#uTimeout').value,10)||1500);
+  setCur(dev,'回读版本中…','回读中');
+  let r;
+  try{
+    /* 数据域长度 0x00，只等同一命令码的应答；子命令不固定，传 -1 匹配任意 */
+    r=await sendUpgrade(VER_CMD,new Uint8Array(0),-1);
+  }catch(err){
+    logU('warn',`  [warn] 回读版本无应答（${err.message}），跳过本台版本校验`);
+    dev.actualVersion=null; dev.versionVerified=false;
+    return false;
+  }
+  const p=r.payload;
+  if(!p||p.length<VER_LEN){
+    logU('warn',`  [warn] 版本应答长度异常：${p?p.length:0} B（期望 ≥ ${VER_LEN}），跳过本台版本校验`);
+    dev.actualVersion=null; dev.versionVerified=false;
+    return false;
+  }
+  const s=verSummary(p);
+  logU('info',`设备信息 SN=${s.sn} 型号=${s.model} 系列=${s.prodType}`);
+  logU('info',`前面板 硬件=${s.fpHw} 软件=${s.fpSw} 协议=${s.proto}`);
+  logU('info',`槽位版本 BMS=${s.bms} PCS=${s.pcs} DC=${s.pv}`);
+
+  const v=parseSlotVersion(p,dev.key);
+  const want=dev.version;
+  dev.actualVersion=v.num;
+  logU('info',`版本比对 设备=${dev.name} 期望=${fmtVersion(want)} 实际=${v.raw}${v.note?'（'+v.note+'）':''}`);
+  if(v.num==null){
+    logU('warn',`  [warn] 设备未回报 ${dev.name} 的有效版本（${v.note||'字段为空'}），不判失败`);
+    dev.versionVerified=false;
+    return false;
+  }
+  if(v.num===want){
+    dev.versionVerified=true;
+    logU('ok',`版本校验 设备=${dev.name} 期望=${fmtVersion(want)} 实际=${v.num} 结果=通过`);
+    return true;
+  }
+  dev.versionVerified=false;
+  throw new Error(`${dev.name} 版本校验失败：包内 ${fmtVersion(want)}，设备回报 ${fmtVersion(v.num)}`);
+}
+function fmtEta(sec){
+  if(!isFinite(sec)||sec<=0) return '—';
+  if(sec<60) return `${Math.round(sec)} s`;
+  const m=Math.floor(sec/60), s=Math.round(sec%60);
+  return s?`${m} 分 ${s} s`:`${m} 分`;
+}
+
+/* 整机升级主流程 */
+async function runPackageUpgrade(){
+  const targets=selectedPkgEntries();
+  if(!S.connected){ toast('尚未连接串口，请点右上角「连接」；波特率等参数可在「设置」页调整','warn'); return; }
+  if(!targets.length){ toast('请先导入 .tcupd 升级包','warn'); return; }
+  const totalBytes=targets.reduce((a,d)=>a+d.data.length,0);
+  const waitSec=parseInt($('#uResetWait').value,10)||0;
+
+  STATE.running=true; STATE.abort=false;
+  $('#uAbort').disabled=false; $('#uStart').disabled=true;
+  refreshStartBtn();
+  $('#uFill').classList.remove('wait');
+  STATE.upTotal=totalBytes; STATE.upDone=0;
+  /* 上一轮的结果芯片必须在这里清掉。否则卡片会在进度 11% 的当口
+     还挂着上一轮的「用时 27.9 s / 平均速率」，看着像已经跑完了。 */
+  setRes(null);
+  segBegin(targets.length);
+  setOverMeta(`0 / ${targets.length} 台 · 0 / ${fmtSize(totalBytes)}`);
+  setProgress(0);
+  setT('#uCurTag','当前固件');
+  $('#uNextRow').hidden=false;
+  setCur('—','准备中');
+  setNext('（无）','等待开始');
+  logU('head',`整机升级开始 设备数=${targets.length} 合计=${fmtSizeLog(totalBytes)} 文件="${STATE.pkgName}"`);
+  logU('info',`推送顺序 明细="${targets.map(d=>`${d.name}(${d.devnum})`).join(' → ')}"`);
+  if(targets.some(x=>VER_CHECK_KEYS.has(x.key))&&waitSec>0) logU('info',`每台完成后等待 ${waitSec} s 供设备复位（仅 EMS 需要，其余三类不等待），可在「设置」页调整`);
+  logU('warn','升级过程中请勿断电或拔线');
+
+  const t0=performance.now();
+  let doneBytes=0, results=[];
+  targets.forEach((d,i)=>{ d.slotNo=i+1; d.slotTotal=targets.length; });
+  try{
+    for(let n=0;n<targets.length;n++){
+      const d=targets[n];
+      const base=doneBytes/totalBytes*100;
+      const span=(d.data.length/totalBytes)*100;
+      const next=targets[n+1];
+      const tailBytes=totalBytes-doneBytes;
+      /* 「下一台」必须在本轮开头设定。若放在上一轮结尾，升级第 n 台时它显示的是
+         targets[n]（即当前这台），会出现「当前 = 下一台」的错位。 */
+      /* 这行说的是「当前这台跑完之后会怎样」，所以判断依据是当前设备而非下一台。 */
+      const dWaits=VER_CHECK_KEYS.has(d.key)&&waitSec>0;
+      setNext(next?`${next.name} ${next.devnum}`:'（无）',
+              next?(dWaits?`本台完成后等待 ${waitSec} s 复位`:'本台完成后开始'):'最后一台');
+      shouldPaint(true);                 /* 换设备：立刻刷出这一台的起始态 */
+      segEnter(n);
+      setOverMeta(`第 ${n+1} / ${targets.length} 台　${fmtSize(doneBytes)} / ${fmtSize(totalBytes)}`);
+      logU('head',`设备升级开始 进度=${n+1}/${targets.length} 设备=${d.name} 设备号=${d.devnum} 版本=${fmtVersion(d.version)} 大小=${fmtSizeLog(d.len)}`);
+      let failed=null, verified=false;
+      try{
+        await upgradeOne(d,{base,span,tailBytes,doneBytes},t0);
+        /* 复位后回读版本：把「包发完了」升级成「版本真的变了」 */
+        verified=await verifyVersionAfterReset(d,waitSec);
+        results.push({d,ok:true,verified});
+        setProgress((doneBytes+d.data.length)/totalBytes*100);
+        logU('ok',`设备升级完成 设备=${d.name} 结果=成功${verified?` 版本=${fmtVersion(d.version)} 校验=通过`:''}`);
+      }catch(err){
+        failed=err;
+        results.push({d,ok:false,err:err.message});
+        logU('err',`设备升级失败 设备=${d.name} 原因="${err.message}"`);
+        if(!STATE.continueOnError){
+          doneBytes+=d.data.length;
+          setCur(d,'升级失败','失败','err');
+          setNext('—','已中止');
+          setProgress(doneBytes/totalBytes*100,'err');
+          throw new Error(`${d.name} 失败：${err.message}`);
+        }
+        logU('warn','  已按设置跳过，继续升级下一台');
+      }
+      doneBytes+=d.data.length;
+      STATE.upDone=doneBytes;
+      segLeave(n,!failed);
+      setOverMeta(`成功 ${n+1-failed?1:0} / ${targets.length} 台　${fmtSize(doneBytes)} / ${fmtSize(totalBytes)}`);
+      setProgress(doneBytes/totalBytes*100);
+
+      /* 复位等待已并入 verifyVersionAfterReset（它自身就要等复位完成才能回读），
+         这里不再重复等待；仅在本台失败时给个状态提示。 */
+      if(failed&&next){
+        setCur(d,'本台失败，跳过等待','已跳过','wait');
+        setNext(`${next.name} ${next.devnum}`,'即将开始');
+      }else if(next){
+        setNext(`${next.name} ${next.devnum}`,`即将开始　整机剩余约 ${fmtEta((totalBytes-doneBytes)/1024/Math.max(.001,(doneBytes/1024)/((performance.now()-t0)/1000)))}`);
+      }
+    }
+    const okN=results.filter(r=>r.ok).length;
+    /* 版本校验只统计需要校验的板子（主控板）。其余三类不做校验，
+       若一并计入分母，统计行永远凑不满，看着像升级没刷全。 */
+    const verTargets=results.filter(r=>VER_CHECK_KEYS.has(r.d.key));
+    const verN=verTargets.length;
+    const verOk=verTargets.filter(r=>r.ok&&r.verified).length;
+    const el=((performance.now()-t0)/1000).toFixed(1);
+    logU(okN===results.length?'ok':'warn',`整机升级结束 结果=${okN===results.length?'成功':'部分成功'} 成功=${okN}/${results.length} 耗时=${el}s`);
+    if(okN===results.length&&verN){
+      logU(verOk===verN?'ok':'warn',`版本校验：${verOk}/${verN} 台已确认版本变更`+
+        (verOk<okN?'（其余未回读到有效版本，不计入失败）':''));
+    }
+    /* 逐台「包内 → 实测」对照：收尾时一眼看出哪台没刷上 */
+    results.forEach(r=>logU(r.verified?'ok':(r.ok?(r.d.verSkipped?'info':'warn'):'err'),
+      `  ${r.d.name} ${r.d.devnum}　${verCell(r.d)}`));
+    /* 这里不再放「版本校验」芯片：逐台结果行（日志尾部）已经逐台写了
+       `EMS S240　V210 → V211`，芯片是同一份信息的重复；而且它在上一轮跑完
+       后会一直挂到下一轮开跑，把「用时 / 平均速率」和当前进度混在一起。 */
+    setRes([['用时',el+' s'],['平均速率',(doneBytes/1024/Math.max(.001,el)).toFixed(1)+' KB/s']]);
+    setOverMeta(`成功 ${okN} / ${results.length} 台　${fmtSize(doneBytes)} / ${fmtSize(totalBytes)}`);
+    setDevMeta('逐台结果与版本对照见下方交互日志');
+    setProgress(100, okN===results.length?'ok':'err');
+    if(okN===results.length){
+      setT('#uCurTag','整机升级结束');
+      setCur('升级完成',`${results.length} 台全部成功`,verN?`${verN} 台 EMS 版本已确认`:'本包无 EMS，未做版本校验','ok');
+    }else{
+      setT('#uCurTag','整机升级结束');
+      setCur(`${results.length} 台中`,`${results.length-okN} 台失败　成功 ${okN} / ${results.length} 台`,'部分失败','err');
+    }
+    setNext('（无）','全部结束');
+    toast(okN===results.length?'整机升级成功':`完成，${results.length-okN} 台失败`, okN===results.length?'ok':'err');
+  }catch(err){
+    logU('err','[fail] 整机升级中断：'+err.message);
+    setRes(null);
+    setProgress(null);
+    setCur('升级中断',err.message,'已中断','err');
+    $('#uFill').classList.remove('wait');
+    toast('升级中断：'+err.message,'err');
+  }finally{
+    STATE.running=false; $('#uAbort').disabled=true;
+    $('#uFill').classList.remove('wait');
+    renderPkgList();
+  }
+}
+
+/* 复位等待已并入 verifyVersionAfterReset —— 它本来就要等设备复位完成才能回读版本，
+   两处各自倒数一遍只会让用户对着同一个倒计时看两遍。 */
+
+/* ---------- 导入包 ---------- */
+/* 导入识别成功后把包信息打进日志。
+   导入除了卡片标题栏没有别的即时反馈，这些数据落进日志才能事后翻查；
+   而「这台到底是哪个版本、多大」在升级出问题时要反复回看，
+   这些数据解析时已经在手里，不落进日志就只能重新导入一次。 */
+function logPkgInfo(name,res){
+  const list=pkgEntries();
+  logU('head',`固件包信息 文件="${name}"`);
+  logU('info',`包内容 文件大小=${fmtSizeLog(res.fileSize)} 载荷=${fmtSizeLog(res.payloadSize)} 设备数=${list.length}`);
+  logU('info',`包校验 devmap=0x${hx(res.devmap)} 包头校验=${res.okHeader?'通过':'失败'} `+
+    `长度校验=${res.okLength?'通过':'失败'} 总长校验=${res.okTotal?'通过':'失败'}`);
+  if(!list.length){ logU('warn','  包内没有可升级的固件，请确认 devmap 与 filesize'); return; }
+  logU('info',`推送顺序 明细="${list.map(e=>`${e.name}(${e.devnum||'空'})`).join(' → ')}"`);
+  list.forEach((e,i)=>{
+    const ok=e.okSum&&e.okXor;
+    logU(ok?'info':'err',`入口信息 序号=${e.index+1} 设备=${e.name} 设备号=${e.devnum||'空'} `+
+      `版本=${fmtVersion(e.version)} 大小=${fmtSizeLog(e.len)} 包数=${Math.ceil(e.len/128)} `+
+      `sum=0x${hx2(e.checksum)} xor=0x${hx(e.checkxor&0xFF)} 校验=${ok?'通过':'失败'}`);
+  });
+}
+function handlePkgFile(f){
+  /* 升级进行中换包会让界面自相矛盾：STATE.pkg 被换成新包，标题栏的台数、
+     入口顺序、目标版本全按新包重画，而 runPackageUpgrade 手里的 targets 仍是
+     旧包那一轮 —— 于是出现「标题栏 4 台、进度却写第 1/1 台」。直接拦掉。
+     解析页的导入走 handleParseFile、只写 PS.pkg，不碰运行态，不受此限制。 */
+  if(STATE.running){ toast('升级进行中，不能导入升级包','err'); return; }
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const buf=new Uint8Array(rd.result);
+      const res=parsePackage(buf);
+      res.raw=buf;
+      STATE.pkg=res; STATE.pkgName=f.name;
+      STATE.continueOnError=$('#uContinue').checked;
+      renderPkgList();
+      showPendingFirmware();
+      const n=pkgEntries().length;
+      logPkgInfo(f.name,res);
+      logU('ok',`导入完成 文件="${f.name}" 设备数=${n} devmap=0x${hx(res.devmap)} 大小=${fmtSizeLog(res.fileSize)}`);
+      toast(`已识别 ${n} 台待升级设备`);
+    }catch(err){
+      setT('#uPkgMeta','解析失败');
+      const pm=$('#uPkgMeta'); pm.style.color='var(--warn)'; pm.hidden=false;
+      STATE.upTotal=0; STATE.upDone=0; segBegin(0);
+      setOverMeta(''); setDevMeta(''); setRes(null);
+      setProgress(0);
+      setT('#uCurTag','当前固件');
+      $('#uNextRow').hidden=true;
+      setCur('导入失败',err.message,'已中断','err');
+      toast(err.message,'err'); logU('err','[fail] 解析失败：'+err.message);
+    }
+  };
+  rd.readAsArrayBuffer(f);
+}
+
+/* =========================================================
+   固件解析页（只读查看，不碰串口、不回填制作页）
+   ========================================================= */
+const PS={pkg:null,name:'',raw:null};
+function handleParseFile(f){
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const buf=new Uint8Array(rd.result);
+      PS.pkg=parsePackage(buf); PS.name=f.name; PS.raw=buf;
+      renderParse();
+      const r=PS.pkg;
+      const bad=r.entries.filter(e=>e.enabled&&(!e.okSum||!e.okXor||e.truncated)).length;
+      const allOk=r.okHeader&&r.okTotal&&r.okLength&&!bad;
+      toast(allOk?`${f.name} 解析通过`:`${f.name} 解析完成，但有校验项未通过`, allOk?'ok':'warn');
+    }catch(err){
+      PS.pkg=null; PS.raw=null; PS.name='';
+      renderParse();
+      toast(err.message,'err');
+    }
+  };
+  rd.readAsArrayBuffer(f);
+}
+/* 清空解析结果：解析页是只读的，没有任何副作用要回滚，
+   丢掉 PS 上的解析产物并重画成空态即可。 */
+function clearParse(){
+  if(!PS.pkg&&!PS.raw&&!PS.name){ toast('当前没有已导入的解析结果','warn'); return; }
+  const had=PS.name;
+  PS.pkg=null; PS.raw=null; PS.name='';
+  renderParse();
+  toast(had?`已清空 ${had}`:'已清空解析结果');
+}
+function renderParse(){
+  const r=PS.pkg;
+  const ids=['pFileSize','pMagic','pDevmap','pTotal','pHdrCrc','pTimeinfo'];
+  /* 清空按钮跟着解析状态走：没有结果时置灰，避免点了只弹一句「没有可清空的」 */
+  $('#pClear').disabled=!r;
+  if(!r){
+    $('#pMeta').textContent='—';
+    $('#pTable').innerHTML='<tbody><tr><td class="dim center" style="padding:18px">'+tr('导入后显示')+'</td></tr></tbody>';
+    ids.forEach(id=>$('#'+id).value='—');
+    $('#pChecks').textContent='—';
+    $('#pHexCard').style.display='none';
+    return;
+  }
+  const bad=r.entries.filter(e=>e.enabled&&(!e.okSum||!e.okXor||e.truncated));
+
+  $('#pMeta').textContent=`${PS.name} · ${fmtSize(r.fileSize)}`;
+  $('#pFileSize').value=`${fmtSize(r.fileSize)} (${r.fileSize} B)`;
+  $('#pMagic').value=r.magic;
+  $('#pDevmap').value='0x'+hx(r.devmap)+' ('+r.devmap.toString(2).padStart(8,'0').split('').reverse().join('')+')';
+  $('#pTotal').value=`${r.total} B${r.okTotal?'':' [fail]'}`;
+  $('#pHdrCrc').value=`0x${hx(r.calcHeaderCrc)}${r.okHeader?'':' [fail]'}`;
+  const ti=parseTimeinfo(r.timeinfo);
+  $('#pTimeinfo').value=ti?`${ti.text}（${r.timeinfo.map(b=>hx(b)).join(' ')}）`:r.timeinfo.map(b=>hx(b)).join(' ');
+
+  let cursor=PAYLOAD_OFF;
+  const rows=r.entries.map(e=>{
+    let off='—',len='—';
+    if(e.enabled){ off=cursor; len=e.len; cursor+=e.len; }
+    const dn=(e.devnum||'').trim();
+    const ok=e.enabled?(e.truncated?'[fail]':(e.okSum&&e.okXor?'[success]':'[fail]')):'—';
+    return `<tr><td><span class="tag tag-dp">${esc(tr(e.name))}</span></td>
+      <td class="mono">${e.index} / bit${e.index}</td>
+      <td class="mono">${esc(dn||'—')}</td>
+      <td class="mono dim">${e.devnumRaw.length?toHexOf(Uint8Array.from(e.devnumRaw)):'(00 00 00 00)'}</td>
+      <td class="val">${fmtVersion(e.version)}</td>
+      <td class="mono">${e.enabled?fmtSize(e.filesize):'—'}</td>
+      <td class="mono">${e.enabled?Math.ceil(e.filesize/128):'—'}</td>
+      <td class="val">0x${hx2(e.checksum)}</td>
+      <td class="val">0x${hx2(e.checkxor)}</td>
+      <td class="mono dim">${e.enabled?('0x'+hx(off)+' – 0x'+hx(off+len)):'—'}</td>
+      <td class="mono">${e.cmd?'0x'+hx(e.cmd):'—'}</td>
+      <td class="val" style="${ok==='[fail]'?'color:var(--danger)':''}">${ok}</td></tr>`;
+  });
+  $('#pTable').innerHTML=`<thead><tr><th>${tr('设备')}</th><th>${tr('入口')}</th><th>${tr('设备号')}</th><th>HEX</th>
+    <th>version</th><th>filesize</th><th>${tr('包数')}</th><th>sum16</th><th>xor8</th>
+    <th>${tr('载荷区间')}</th><th>cmd</th><th>${tr('校验')}</th></tr></thead><tbody>${rows.join('')}</tbody>`;
+
+  const ck=[[tr('包头校验'),r.okHeader],[tr('总长一致'),r.okLength],[tr('载荷长度'),r.okTotal]];
+  $('#pChecks').innerHTML=ck.map(([k,ok])=>`<span style="margin-right:14px">${k} ${ok?'[success]':'[fail]'}</span>`).join('')
+    +(bad.length?`<span style="color:var(--danger)">${tr('有')} ${bad.length} ${tr('台数据校验失败')}</span>`:'');
+
+  $('#pHexCard').style.display='';
+  renderHexHeader(PS.raw,'#pHexDump');
+}
+function renderEnvRows(){
+  const el=$('#sEnv'); if(!el) return;
+  const ok='serial' in navigator;
+  const rows=[
+    ['Web Serial API', ok?'[success] 可用':'[fail] 不可用（需 Chrome / Edge 89+）'],
+    ['串口参数', '8N1 · 无流控 · 从站地址 0x0000'],
+    ['协议', 'TCSD · AA AA + 地址 + 命令码 + 长度 + 数据域 + 校验'],
+    ['存储', '参数保存在浏览器 localStorage'],
+    ['工具版本', 'v1.0 · 单文件 HTML'],
+  ];
+  el.innerHTML=rows.map(([k,v])=>`<div class="k">${esc(tr(k))}</div><div class="v">${esc(tr(v))}</div>`).join('');
+}
+
+/* =========================================================
+   配置持久化
+   ========================================================= */
+/* 版本号改为默认值 100 后必须升存档版本号：
+   rev=2 的旧存档里每个槽位的 version 都是空串，回填会把新的默认值覆盖掉。
+   串口参数与用户改过的入口序号照常恢复，所以只对 slots 做版本校验。 */
+const CFG_REV=3;
+/* 出厂默认值调整的一次性迁移标记，与 CFG_REV 分开。
+   CFG_REV 只能升结构（升了会作废用户填好的设备号 / 版本号 / 入口序号）；
+   而「失败重试 5 → 10」这类出厂值改动只需要把还没被动过的字段推到新默认值，
+   用 defRev 单独标记即可。改出厂值时把这个数 +1。 */
+const CFG_DEFREV=2;
+function saveCfg(){
+  try{ localStorage.setItem('skytimes-cfg',JSON.stringify({
+    rev:CFG_REV,defRev:CFG_DEFREV,
+    slots:STATE.slots.map(s=>({key:s.key,idx:s.idx,devnum:s.devnum,version:s.version})),
+    baud:$('#uBaud').value,addr:$('#uAddr').value,timeout:$('#uTimeout').value,retry:$('#uRetry').value,
+    resetWait:$('#uResetWait').value,
+  })); }catch(e){}
+}
+/* 防抖落盘：input 事件每敲一个字符就触发一次 saveCfg，
+   而 localStorage.setItem 是同步阻塞写，密集输入时会明显拖慢响应。 */
+let cfgTimer=0;
+function saveCfgSoon(){
+  clearTimeout(cfgTimer);
+  cfgTimer=setTimeout(saveCfg,300);
+}
+function loadCfg(){
+  try{
+    const c=JSON.parse(localStorage.getItem('skytimes-cfg')||'{}');
+    if(c.rev===CFG_REV&&c.slots) c.slots.forEach(x=>{
+      const s=STATE.slots.find(y=>y.key===x.key);
+      if(s){ if(x.devnum!=null)s.devnum=x.devnum; if(x.version!=null)s.version=x.version; if(Number.isInteger(x.idx))s.idx=x.idx; }
+    });
+    if(c.baud)$('#uBaud').value=c.baud; if(c.addr)$('#uAddr').value=c.addr;
+    if(c.timeout)$('#uTimeout').value=c.timeout; if(c.retry)$('#uRetry').value=c.retry;
+    if(c.resetWait!=null)$('#uResetWait').value=c.resetWait;
+    /* 存档里若还是上一版出厂值（5）就跟着迁到 10；用户自己调过的 0 / 2 保持不动。
+       beforeunload 每次都会 saveCfg，defRev 随之落盘，所以这里只会执行一次。 */
+    if(c.defRev!==CFG_DEFREV&&(!c.retry||c.retry==='5')) $('#uRetry').value='10';
+  }catch(e){}
+}
+
+/* =========================================================
+   事件绑定
+   ========================================================= */
+function initNav(){
+  $$('.nav-item').forEach(it=>it.addEventListener('click',()=>{
+    $$('.nav-item').forEach(x=>x.classList.remove('active'));
+    it.classList.add('active');
+    $$('.page').forEach(p=>p.classList.remove('active'));
+    $('#page-'+it.dataset.page).classList.add('active');
+    $('#crumbNow').textContent=it.querySelector('.nav-label').textContent;
+    /* 引导的洞与气泡是按升级页坐标算的，切页后必然错位，直接收掉 */
+    if(typeof tourHide==='function'&&!$('#tour').hidden) tourHide();
+  }));
+  /* 侧栏折叠态：HTML 上默认就带 sidebar-collapsed（首次打开即折叠），
+     用户手动改过后以记住的为准。折叠态下 .nav-label 整体隐藏，按钮只剩图标，
+     所以文案无需跟着改。 */
+  const app=$('#app');
+  try{
+    const sb=localStorage.getItem('skytimes-sidebar');
+    if(sb!=null) app.classList.toggle('sidebar-collapsed',sb==='collapsed');
+  }catch(e){}
+  $('#sidebarToggle').addEventListener('click',()=>{
+    app.classList.toggle('sidebar-collapsed');
+    try{ localStorage.setItem('skytimes-sidebar',app.classList.contains('sidebar-collapsed')?'collapsed':'open'); }catch(e){}
+  });
+  const btn=$('#themeBtn');
+  /* 主题默认浅色：HTML 上 data-theme="light" 已经写死，
+     这里只有用户显式切过才覆盖，避免首次打开闪一下深色。 */
+  let saved=null;
+  try{ saved=localStorage.getItem('skytimes-theme'); }catch(e){}
+  if(saved==='dark'||saved==='light') document.documentElement.setAttribute('data-theme',saved);
+  /* 符号 id 本身已带 i- 前缀，这里不能再拼一次，否则 href 会变成 #i-i-moon，图标永远不显示 */
+  const sync=()=>$('#themeBtn').innerHTML=`<svg><use href="#${document.documentElement.getAttribute('data-theme')==='light'?'i-moon':'i-sun'}"/></svg>`;
+  sync();
+  btn.addEventListener('click',()=>{
+    const cur=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';
+    document.documentElement.setAttribute('data-theme',cur);
+    localStorage.setItem('skytimes-theme',cur); sync();
+  });
+}
+function bind(){
+  $('#bGen').addEventListener('click',generateFile);
+  $('#bClear').addEventListener('click',()=>{
+    /* 清空是「回到出厂」：源文件、勾选、设备号、版本号、入口模板一并复位。
+       设备号/版本号取SLOTS 的声明默认值（版本号 100），而不是清成空串。 */
+    STATE.slots.forEach(s=>{
+      const d=SLOT_BY_KEY[s.key];
+      s.data=null; s.sum=0; s.xor=0; s.fileName=''; s.enabled=false;
+      s.devnum=d.devnum; s.version=d.version; s.touched=false;
+    });
+    STATE.fileName=autoFileName(); $('#bFileName').value=STATE.fileName;
+    saveCfg();                    /* 不存盘的话刷新后又把旧设备号读回来 */
+    renderBuilder(); toast('已清空');
+  });
+  /* 勾选只干一件事：按 Tps_日期时间 重填一次文件名。
+     输入框始终可编辑 —— 想改名直接改，不用先取消勾选；
+     想拿回自动名，取消勾选后再勾上即可（会按当前时间重新生成）。 */
+  $('#bAutoName').addEventListener('change',e=>{
+    if(e.target.checked){ const n=autoFileName(); STATE.fileName=n; $('#bFileName').value=n; }
+    renderBuilder();
+  });
+  $('#bFileName').addEventListener('input',e=>{ STATE.fileName=e.target.value; });
+
+  $('#uImport').addEventListener('click',()=>$('#uFile').click());
+  $('#pImport').addEventListener('click',()=>$('#pFile').click());
+  $('#pClear').addEventListener('click',clearParse);
+  $('#pFile').addEventListener('change',e=>{const f=e.target.files[0];if(f)handleParseFile(f);e.target.value='';});
+  $('#uFile').addEventListener('change',e=>{const f=e.target.files[0];if(f)handlePkgFile(f);e.target.value='';});
+  $('#uLogPause').addEventListener('click',()=>setLogAuto(!logAutoScroll));
+  $('#uLogExport').addEventListener('click',exportLog);
+  $('#uLogAuto').addEventListener('change',e=>setLogAutoSave(e.target.checked));
+  $('#uLogDir').addEventListener('click',()=>pickLogDir());
+  $('#uStart').addEventListener('click',runPackageUpgrade);
+  $('#uAbort').addEventListener('click',()=>{
+    STATE.abort=true;
+    S.waiters.forEach(w=>{clearTimeout(w.timer);w.reject(new Error('已中止'));});
+    S.waiters=[]; logU('warn','用户中止 原因="用户点了中止按钮"');
+  });
+  $('#uConnToggle').addEventListener('click',async()=>{
+    if(S.connected){ await serialDisconnect(); }
+    else { await serialConnect(); }
+  });
+  /* 顶栏状态芯片只做状态展示，不再跳转到设置页：
+     看一眼连接状态是高频动作，跳页会打断当前操作；参数仍可从左侧「设置」进入。 */
+  ['uBaud','uTimeout','uRetry','uResetWait'].forEach(id=>$('#'+id).addEventListener('change',e=>{
+    saveCfg();
+    const t=$('#sSaved'); t.classList.add('show');
+    clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1400);
+    updateConnUI();
+  }));
+  $('#sReset').addEventListener('click',()=>{
+    /* 出厂值：波特率 115200 / 超时 1500ms / 重试 10 次 / 复位等待 15s。
+       改任何一个都要同步这里，否则「恢复默认」会把用户调过的参数又拉回去。 */
+    $('#uBaud').value='115200'; $('#uTimeout').value='1500'; $('#uRetry').value='10'; $('#uResetWait').value='15';
+    saveCfg(); updateConnUI();
+    const t=$('#sSaved'); t.textContent=tr('已恢复默认'); t.classList.add('show');
+    clearTimeout(t._h); t._h=setTimeout(()=>{t.classList.remove('show');t.textContent=tr('已保存');},1600);
+    toast('已恢复默认参数');
+  });
+  renderEnvRows();
+  $('#uClearLog').addEventListener('click',logClear);
+  /* 自动保存的目录句柄从 IndexedDB 读回来是异步的，不阻塞后面的引导初始化 */
+  initLogAutoSave();
+  /* 引导：点按钮从第 1 步开始，Esc 关闭，左右方向键翻页。
+     遮罩不拦截 Tab 焦点循环之外的东西，洞里的按钮仍可点（ring 是 pointer-events:none）。 */
+  $('#uGuideBtn').addEventListener('click',()=>tourStart('upgrade',0));
+  $('#bGuideBtn').addEventListener('click',()=>tourStart('builder',0));
+  $('#tourSkip').addEventListener('click',tourHide);
+  $('#tourPrev').addEventListener('click',()=>tourGo(-1));
+  $('#tourNext').addEventListener('click',()=>tourGo(1));
+  document.addEventListener('keydown',e=>{
+    if($('#tour').hidden) return;
+    if(e.key==='Escape'){ tourHide(); return; }
+    if(e.key==='ArrowRight'){ tourGo(1); }
+    if(e.key==='ArrowLeft'){ tourGo(-1); }
+  });
+  /* 窗口尺寸变化后洞与气泡要重新贴合，否则拉宽窗口会留下错位的暗幕 */
+  window.addEventListener('resize',()=>{ if(!$('#tour').hidden){ const st=tourStep(); if(st) tourPlace($(st.sel)); } });
+  $('#uContinue').addEventListener('change',e=>{STATE.continueOnError=e.target.checked;});
+  $('#langBtn').addEventListener('click',()=>applyLang(LANG==='zh'?'en':'zh'));
+}
+
+/* =========================================================
+   启动
+   ========================================================= */
+(function boot(){
+  initNav(); bind(); loadCfg();
+  STATE.fileName=autoFileName();
+  $('#bFileName').value=STATE.fileName;
+  renderBuilder(); updateConnUI(); setLogAuto(true);
+  STATE.continueOnError=true;
+  showPendingFirmware();
+  logU('head','工具就绪 工具="SkyTimes 升级工具"');
+  if(!('serial' in navigator)){
+    logU('warn','[warn] 当前浏览器不支持 Web Serial，串口升级不可用；打包与解析不受影响');
+    const n=document.createElement('div');
+    n.className='notice warn mb';
+    n.innerHTML='<svg><use href="#i-alert"/></svg><div><b>当前浏览器不支持 Web Serial API。</b>固件制作不受影响；整机升级请使用 <b>Chrome / Edge 89+</b>。</div>';
+    $('#page-upgrade').prepend(n);
+  } else logU('info','环境检查 WebSerial=OK');
+  applyLang(localStorage.getItem('skytimes-lang')||'zh');   /* 默认中文：扫描静态文案 + 重画动态区域 */
+  /* 无条件落盘：输入框走的是 300ms 防抖写，用户改完立刻关页时不能丢配置。
+     串口已连接时额外拦一道，防误关打断正在进行的升级。 */
+  window.addEventListener('beforeunload',e=>{ saveCfg(); if(S.connected){ e.preventDefault(); e.returnValue=''; } });
+})();
+</script>
+</body>
+</html>
