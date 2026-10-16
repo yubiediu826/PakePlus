@@ -715,7 +715,8 @@ select.input{font-family:var(--font-ui);cursor:pointer}
                 <option value="0">0</option>
                 <option value="2">2</option>
                 <option value="5">5</option>
-                <option value="10" selected>10</option>
+                <option value="10">10</option>
+                <option value="30" selected>30</option>
               </select>
               <div class="hint">设备按包序号去重，重发上一包会被接受</div>
             </div>
@@ -739,7 +740,29 @@ select.input{font-family:var(--font-ui);cursor:pointer}
                 <option value="20">20 秒</option>
                 <option value="30">30 秒</option>
               </select>
-              <div class="hint">设备写入完成后需要复位并重启 bootloader；只有 EMS 会等待复位并回读版本，DC / PCS / BMS 的固件由本板转发给下游从机，不等待也不校验版本</div>
+              <div class="hint">设备写入完成后需要复位并重启 bootloader；只有 EMS 会等待复位并回读版本，选 0（不等待）时 EMS 也不回读版本，DC / PCS / BMS 的固件由本板转发给下游从机，不等待也不校验版本</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-head-icon"><svg><use href="#i-terminal"/></svg></div>
+        <h3>日志保存</h3><span class="spacer"></span><span class="meta">自动保存满额落盘</span></div>
+      <div class="card-body">
+        <div class="set-list">
+          <div class="set-row">
+            <div class="set-lbl"><b>日志保存数量</b><span>攒够多少条自动落盘一次</span></div>
+            <div class="set-ctl">
+              <select class="input" id="uLogSaveMax">
+                <option value="500">500 条</option>
+                <option value="1000">1000 条</option>
+                <option value="2000" selected>2000 条</option>
+                <option value="5000">5000 条</option>
+                <option value="10000">10000 条</option>
+              </select>
+              <div class="hint">整机升级一台设备约 900 行日志；数值越大单文件上下文越完整，但满额后屏幕上的日志清得越早。落盘需要先在日志栏「选择目录」</div>
             </div>
           </div>
         </div>
@@ -1019,6 +1042,16 @@ const I18N={
 
 '版本校验：':'Version check: ',
 '台已确认版本变更':' devices confirmed the new version',
+/* 复位等待 = 0 时的跳过口径：这些键都要比它内部包含的短词长，
+   否则「跳过本台版本校验」会先把长句切碎。 */
+'复位等待为 0（不等待），按设置跳过 ':'Reset wait is 0 (no wait), so the version readback of ',
+' 版本回读；需要校验请在「设置」页把复位等待调大':' is skipped per the setting. To verify versions, raise the reset wait in Settings',
+'复位等待为 0，跳过版本回读':'Reset wait is 0, skipping the version readback',
+'复位等待为 0（不等待）：EMS 写入后不等复位、也不回读版本，可在「设置」页调大以启用校验':'Reset wait is 0 (no wait): the EMS version is neither awaited nor read back. Raise it in Settings to enable the check',
+'版本校验：复位等待为 0，':'Version check: reset wait is 0, ',
+' 台 EMS 全部跳过回读（按设置不校验）':' EMS board(s) skipped the readback (not checked per the setting)',
+' 台 EMS 未回读（复位等待 0）':' EMS board(s) were not read back (reset wait 0)',
+' 台 EMS 版本已确认，':' EMS board(s) confirmed, ',
 /* 以下六条必须比它们各自包含的短词更长，tr() 才会先命中长键。
    少了长度约束就会出现「校验中」被译成 "Check中」、「写入完成」译成 "写入Done"。 */
 ' 台已确认':' units confirmed',
@@ -1139,7 +1172,7 @@ const I18N={
 '复位等待':'Reset Wait',
 'EMS 固件完成后的等待秒数':'Seconds to wait after the EMS firmware finishes',
 '0（不等待）':'0 (no wait)',
-'设备写入完成后需要复位并重启 bootloader；只有 EMS 会等待复位并回读版本，DC / PCS / BMS 的固件由本板转发给下游从机，不等待也不校验版本':'After writing, the device resets and restarts the bootloader. Only the EMS waits for that and reads its version back; DC / PCS / BMS firmware is forwarded to the downstream slaves by the board itself, with no wait and no version check',
+'设备写入完成后需要复位并重启 bootloader；只有 EMS 会等待复位并回读版本，选 0（不等待）时 EMS 也不回读版本，DC / PCS / BMS 的固件由本板转发给下游从机，不等待也不校验版本':'After writing, the device resets and restarts the bootloader. Only the EMS waits for that and reads its version back; with 0 (no wait) the EMS version is not read back either. DC / PCS / BMS firmware is forwarded to the downstream slaves by the board itself, with no wait and no version check',
 '[success] 可用':'[success] available',
 '[fail] 不可用（需 Chrome / Edge 89+）':'[fail] unavailable (needs Chrome / Edge 89+)',
 '8N1 · 无流控 · 从站地址 0x0000':'8N1 · no flow control · slave address 0x0000',
@@ -1148,6 +1181,12 @@ const I18N={
 'v1.0 · 单文件 HTML':'v1.0 · single-file HTML',
 '已恢复默认':'Defaults restored',
 '已恢复默认参数':'Default parameters restored',
+/* ---------- 设置页 · 日志保存 ---------- */
+'日志保存':'Log Saving',
+'自动保存满额落盘':'written to disk when the batch is full',
+'日志保存数量':'Batch Size',
+'攒够多少条自动落盘一次':'How many entries fill one auto-saved batch',
+'整机升级一台设备约 900 行日志；数值越大单文件上下文越完整，但满额后屏幕上的日志清得越早。落盘需要先在日志栏「选择目录」':'One device is about 900 log lines during a package upgrade; a larger batch keeps more context in one file but clears the on-screen log sooner. Pick a folder in the log header first',
 
 /* ---------- 日志结构化字段词条 ----------
    这些键都必须是单 token（英文侧不带空格），否则结构化行会被切碎。
@@ -1223,7 +1262,7 @@ const I18N={
 '这里核对包内设备台数与包头校验。校验不通过时不要开始升级，否则设备会拒绝写入。':'Verify the device count and header check here. Do not start an upgrade while the check fails — the device will refuse the write.',
 '勾选后，某一台失败不会中断整轮，继续推送下一台；不勾选则第一台失败即中止。':'When ticked, one device failing does not abort the run — the next device is pushed. When unticked, the first failure stops everything.',
 '按包内入口序号升序逐台推送。过程中可随时「中止」；每台写完后设备会复位重启 bootloader，工具按「设置」里的复位等待时间留出间隔。':'Devices are pushed one by one in ascending entry order. You can abort at any time; after each device the tool waits out the reset delay from Settings while the device reboots into its bootloader.',
-'逐帧记录收发数据与每台设备的处理结果，可暂停滚动或导出为 txt。勾选「自动保存」后每满 2000 条自动写入所选目录的 logs 子文件夹并清空当前日志。升级出问题先看这里。':'Every frame sent and received, plus each device result, is recorded here. Pause or export it as txt. With "Auto-save" ticked, every 2000 entries are written into the logs sub-folder of the chosen folder and the on-screen log is cleared. Check this first when an upgrade misbehaves.',
+'逐帧记录收发数据与每台设备的处理结果，可暂停滚动或导出为 txt。勾选「自动保存」后每满设定的条数自动写入所选目录的 logs 子文件夹并清空当前日志。升级出问题先看这里。':'Every frame sent and received, plus each device result, is recorded here. Pause or export it as txt. With "Auto-save" ticked, each full batch (see "Log Saving" in Settings) is written into the logs sub-folder of the chosen folder and the on-screen log is cleared. Check this first when an upgrade misbehaves.',
 '整机进度':'Overall',
 '当前':'Current',
 '下一台':'Next',
@@ -1300,7 +1339,10 @@ const I18N={
 '正在保存…':'saving…',
 '目录未选择，自动保存将改用浏览器下载目录':'no folder picked — auto-save falls back to the browser download folder',
 '点击「选择目录」指定自动保存位置（与固件导出同一目录，文件写入其 logs 子文件夹）':'Click "Pick folder" to choose where auto-save writes (same folder as the firmware export; files go into its logs sub-folder)',
-'自动保存已开启，每 2000 条写入 logs 文件夹并清空当前日志':'Auto-save is on: every 2000 entries are written to the logs folder and the on-screen log is cleared',
+/* 原「自动保存已开启，每 2000 条写入 logs 文件夹并清空当前日志」拆成两段：
+   条数已改成设置页可调，句子里要插进实际数字，整句没法再当键用。 */
+'自动保存已开启，每 ':'Auto-save is on: every ',
+' 条写入 logs 文件夹并清空当前日志':' entries are written to the logs folder and the on-screen log is cleared',
 '自动保存已关闭':'Auto-save is off',
 '已自动保存':'Auto-saved ',
 ' 条日志到 ':' log entries to ',
@@ -2091,10 +2133,22 @@ function exportLog(){
 /* =========================================================
    日志自动保存：满 LOG_SAVE_MAX 条落盘一次，然后清掉已保存的旧日志重新计数
    ========================================================= */
-/* 一批的条数。整机升级一台设备约 900 行（每包一条 TX + 一条 RX），
+/* 一批的条数。可由设置页「日志保存数量」改，LOG_SAVE_MAX_DEF 是恢复默认用的出厂值。
+   整机升级一台设备约 900 行（每包一条 TX + 一条 RX），
    2000 条 ≈ 两台设备的量：一轮多机升级会切好几批，磁盘占用可控，
-   单文件打开时又能直接看到上下文，不会碎成几百个小 txt。 */
-const LOG_SAVE_MAX=2000;
+   单文件打开时又能直接看到上下文，不会碎成几百个小 txt。
+   要调大的场景：一轮几十台、只想收一两份完整日志，且屏幕能扛住更多行。 */
+const LOG_SAVE_MAX_DEF=2000;
+let LOG_SAVE_MAX=LOG_SAVE_MAX_DEF;
+/* 把设置页选中的条数接到自动保存的触发阈值上。
+   改小到「屏上已经攒的量」以下时顺手补一次落盘：否则选了 500、屏上已 1200 条，
+   用户得眼看着越界还要一直等到 1500 才写盘。 */
+function applyLogSaveMax(){
+  const v=parseInt($('#uLogSaveMax').value,10);
+  LOG_SAVE_MAX=v>0?v:LOG_SAVE_MAX_DEF;
+  renderLogAutoInfo();
+  if(logAutoSave&&logAutoCount>=LOG_SAVE_MAX) autoSaveLog();
+}
 /* 落盘子目录名：与固件导出同在所选目录下，日志单独归一个文件夹，不和 .tcupd 混在一起。 */
 const LOG_SAVE_SUBDIR='logs';
 const LOG_SAVE_IDB='skytimes-tool', LOG_SAVE_STORE='kv', LOG_SAVE_KEY='logDir';
@@ -2229,9 +2283,9 @@ function setLogAutoSave(on){
        第一次打开工具不打扰。结果拿到后再定提示：拿到目录说规则，没拿到说去哪选。 */
     ensureLogDirOnGesture().then(()=>{
       /* 没拿到目录时分两种情况说：浏览器根本不支持，就别让用户去点一个点不动的按钮。 */
-      const msg=logDirHandle?'自动保存已开启，每 2000 条写入 logs 文件夹并清空当前日志'
-              :FSAA_OK?'自动保存已开启，点日志栏「选择目录」指定位置，日志将写入该目录的 logs 子文件夹'
-                     :'当前浏览器不支持写入指定目录（需 Chrome / Edge），自动保存将改用浏览器下载目录';
+      const msg=logDirHandle?tr('自动保存已开启，每 ')+`${LOG_SAVE_MAX}`+tr(' 条写入 logs 文件夹并清空当前日志')
+              :FSAA_OK?tr('自动保存已开启，点日志栏「选择目录」指定位置，日志将写入该目录的 logs 子文件夹')
+                     :tr('当前浏览器不支持写入指定目录（需 Chrome / Edge），自动保存将改用浏览器下载目录');
       toast(msg,logDirHandle?'ok':FSAA_OK?'info':'warn');
     });
   }else{
@@ -2488,7 +2542,7 @@ const TOUR_SETS={
     {sel:'#uPkgMeta',         title:'确认包信息', body:'这里核对包内设备台数与包头校验。校验不通过时不要开始升级，否则设备会拒绝写入。'},
     {sel:'#uContinue',        title:'失败策略',   body:'勾选后，某一台失败不会中断整轮，继续推送下一台；不勾选则第一台失败即中止。'},
     {sel:'#uStart',           title:'开始整机升级', body:'按包内入口序号升序逐台推送。过程中可随时「中止」；每台写完后设备会复位重启 bootloader，工具按「设置」里的复位等待时间留出间隔。'},
-    {sel:'#uLogCard',         title:'交互日志',   body:'逐帧记录收发数据与每台设备的处理结果，可暂停滚动或导出为 txt。勾选「自动保存」后每满 2000 条自动写入所选目录的 logs 子文件夹并清空当前日志。升级出问题先看这里。'},
+    {sel:'#uLogCard',         title:'交互日志',   body:'逐帧记录收发数据与每台设备的处理结果，可暂停滚动或导出为 txt。勾选「自动保存」后每满设定的条数自动写入所选目录的 logs 子文件夹并清空当前日志。升级出问题先看这里。'},
   ],
   builder:[
     {sel:'#mkRows',           title:'按设备录入', body:'每行是一块板子：填设备号、版本号，选好 <code>.bin</code> 源文件，再勾上「升级」表示这行参与合成。没有源文件的行不会被写进升级包。'},
@@ -3081,6 +3135,16 @@ async function verifyVersionAfterReset(dev,waitSec){
     logU('info',`  ${dev.name} 不复位、不回读版本：固件需由本板转发给下游从机，版本号暂不变`);
     return false;
   }
+  /* 复位等待 = 0 同样是「用户明确不要等」：此时设备多半还在 bootloader 里没起来，
+     回读要么无应答（现在按 warn 放过），要么读到 bootloader 自己的旧版本 ——
+     后者会撞上末尾的版本比对，被判成「版本校验失败」，把一台其实刷成功的板子
+     报成失败。所以 0 就直接不读：结果里标成「不校验」，判定与统计口径同步调整。 */
+  if(!(waitSec>0)){
+    dev.verSkipped=true; dev.actualVersion=null; dev.versionVerified=false;
+    setCur(dev,'复位等待为 0，跳过版本回读','写入完成','ok');
+    logU('info',`  复位等待为 0（不等待），按设置跳过 ${dev.name} 版本回读；需要校验请在「设置」页把复位等待调大`);
+    return false;
+  }
   const wait=Math.max(waitSec,3);
   const tag='复位后校验版本';
   setCur(dev,`${tag}　${wait} s`,'复位等待','wait');
@@ -3163,6 +3227,7 @@ async function runPackageUpgrade(){
   logU('head',`整机升级开始 设备数=${targets.length} 合计=${fmtSizeLog(totalBytes)} 文件="${STATE.pkgName}"`);
   logU('info',`推送顺序 明细="${targets.map(d=>`${d.name}(${d.devnum})`).join(' → ')}"`);
   if(targets.some(x=>VER_CHECK_KEYS.has(x.key))&&waitSec>0) logU('info',`每台完成后等待 ${waitSec} s 供设备复位（仅 EMS 需要，其余三类不等待），可在「设置」页调整`);
+  else if(targets.some(x=>VER_CHECK_KEYS.has(x.key))) logU('info','复位等待为 0（不等待）：EMS 写入后不等复位、也不回读版本，可在「设置」页调大以启用校验');
   logU('warn','升级过程中请勿断电或拔线');
 
   const t0=performance.now();
@@ -3227,10 +3292,14 @@ async function runPackageUpgrade(){
     const verTargets=results.filter(r=>VER_CHECK_KEYS.has(r.d.key));
     const verN=verTargets.length;
     const verOk=verTargets.filter(r=>r.ok&&r.verified).length;
+    /* 按设置跳过回读的（复位等待 = 0）不计入分母：把「主动不读」算成「读了没对上」，
+       统计行会凭空多出一台没刷上。 */
+    const verSkip=verTargets.filter(r=>r.d.verSkipped).length;
     const el=((performance.now()-t0)/1000).toFixed(1);
     logU(okN===results.length?'ok':'warn',`整机升级结束 结果=${okN===results.length?'成功':'部分成功'} 成功=${okN}/${results.length} 耗时=${el}s`);
     if(okN===results.length&&verN){
-      logU(verOk===verN?'ok':'warn',`版本校验：${verOk}/${verN} 台已确认版本变更`+
+      if(verSkip===verN) logU('info',`版本校验：复位等待为 0，${verN} 台 EMS 全部跳过回读（按设置不校验）`);
+      else logU(verOk===verN-verSkip?'ok':'warn',`版本校验：${verOk}/${verN-verSkip} 台已确认版本变更`+
         (verOk<okN?'（其余未回读到有效版本，不计入失败）':''));
     }
     /* 逐台「包内 → 实测」对照：收尾时一眼看出哪台没刷上 */
@@ -3245,7 +3314,12 @@ async function runPackageUpgrade(){
     setProgress(100, okN===results.length?'ok':'err');
     if(okN===results.length){
       setT('#uCurTag','整机升级结束');
-      setCur('升级完成',`${results.length} 台全部成功`,verN?`${verN} 台 EMS 版本已确认`:'本包无 EMS，未做版本校验','ok');
+      /* 终态也要跟着跳过口径走：全跳过时不能说「版本已确认」 */
+      const verTxt=!verN?'本包无 EMS，未做版本校验'
+        :verSkip===verN?`${verN} 台 EMS 未回读（复位等待 0）`
+        :verSkip?`${verOk} 台 EMS 版本已确认，${verSkip} 台未回读`
+        :`${verN} 台 EMS 版本已确认`;
+      setCur('升级完成',`${results.length} 台全部成功`,verTxt,'ok');
     }else{
       setT('#uCurTag','整机升级结束');
       setCur(`${results.length} 台中`,`${results.length-okN} 台失败　成功 ${okN} / ${results.length} 台`,'部分失败','err');
@@ -3432,15 +3506,15 @@ function renderEnvRows(){
 const CFG_REV=3;
 /* 出厂默认值调整的一次性迁移标记，与 CFG_REV 分开。
    CFG_REV 只能升结构（升了会作废用户填好的设备号 / 版本号 / 入口序号）；
-   而「失败重试 5 → 10」这类出厂值改动只需要把还没被动过的字段推到新默认值，
+   而「失败重试 5 → 10 → 30」这类出厂值改动只需要把还没被动过的字段推到新默认值，
    用 defRev 单独标记即可。改出厂值时把这个数 +1。 */
-const CFG_DEFREV=2;
+const CFG_DEFREV=3;
 function saveCfg(){
   try{ localStorage.setItem('skytimes-cfg',JSON.stringify({
     rev:CFG_REV,defRev:CFG_DEFREV,
     slots:STATE.slots.map(s=>({key:s.key,idx:s.idx,devnum:s.devnum,version:s.version})),
     baud:$('#uBaud').value,addr:$('#uAddr').value,timeout:$('#uTimeout').value,retry:$('#uRetry').value,
-    resetWait:$('#uResetWait').value,
+    resetWait:$('#uResetWait').value,logSaveMax:$('#uLogSaveMax').value,
   })); }catch(e){}
 }
 /* 防抖落盘：input 事件每敲一个字符就触发一次 saveCfg，
@@ -3460,9 +3534,13 @@ function loadCfg(){
     if(c.baud)$('#uBaud').value=c.baud; if(c.addr)$('#uAddr').value=c.addr;
     if(c.timeout)$('#uTimeout').value=c.timeout; if(c.retry)$('#uRetry').value=c.retry;
     if(c.resetWait!=null)$('#uResetWait').value=c.resetWait;
-    /* 存档里若还是上一版出厂值（5）就跟着迁到 10；用户自己调过的 0 / 2 保持不动。
+    /* 老存档没有 logSaveMax 字段：下拉保持 HTML 里的 2000 选中项，
+       再由 applyLogSaveMax() 把阈值接上（默认值即 LOG_SAVE_MAX_DEF）。 */
+    if(c.logSaveMax)$('#uLogSaveMax').value=c.logSaveMax;
+    applyLogSaveMax();
+    /* 存档里若还是上一版出厂值（10）就跟着迁到 30；用户自己调过的 0 / 2 / 5 保持不动。
        beforeunload 每次都会 saveCfg，defRev 随之落盘，所以这里只会执行一次。 */
-    if(c.defRev!==CFG_DEFREV&&(!c.retry||c.retry==='5')) $('#uRetry').value='10';
+    if(c.defRev!==CFG_DEFREV&&(!c.retry||c.retry==='10')) $('#uRetry').value='30';
   }catch(e){}
 }
 
@@ -3550,16 +3628,18 @@ function bind(){
   });
   /* 顶栏状态芯片只做状态展示，不再跳转到设置页：
      看一眼连接状态是高频动作，跳页会打断当前操作；参数仍可从左侧「设置」进入。 */
-  ['uBaud','uTimeout','uRetry','uResetWait'].forEach(id=>$('#'+id).addEventListener('change',e=>{
+  ['uBaud','uTimeout','uRetry','uResetWait','uLogSaveMax'].forEach(id=>$('#'+id).addEventListener('change',e=>{
+    if(id==='uLogSaveMax') applyLogSaveMax();
     saveCfg();
     const t=$('#sSaved'); t.classList.add('show');
     clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1400);
     updateConnUI();
   }));
   $('#sReset').addEventListener('click',()=>{
-    /* 出厂值：波特率 115200 / 超时 1500ms / 重试 10 次 / 复位等待 15s。
+    /* 出厂值：波特率 115200 / 超时 1500ms / 重试 30 次 / 复位等待 15s / 日志满额 2000 条。
        改任何一个都要同步这里，否则「恢复默认」会把用户调过的参数又拉回去。 */
-    $('#uBaud').value='115200'; $('#uTimeout').value='1500'; $('#uRetry').value='10'; $('#uResetWait').value='15';
+    $('#uBaud').value='115200'; $('#uTimeout').value='1500'; $('#uRetry').value='30'; $('#uResetWait').value='15';
+    $('#uLogSaveMax').value=String(LOG_SAVE_MAX_DEF); applyLogSaveMax();
     saveCfg(); updateConnUI();
     const t=$('#sSaved'); t.textContent=tr('已恢复默认'); t.classList.add('show');
     clearTimeout(t._h); t._h=setTimeout(()=>{t.classList.remove('show');t.textContent=tr('已保存');},1600);
