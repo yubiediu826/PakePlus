@@ -118,6 +118,8 @@ svg{fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-l
 .status-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;flex-shrink:0;
   background:var(--glass-strong);color:var(--fg-2);font-size:11px;font-weight:600;border:1px solid var(--border);font-family:var(--font-mono)}
 .status-chip.on{background:var(--accent-soft);color:var(--accent)}
+/* 端口被占着但没连上：黄色，提醒用户去「设置」页释放 */
+.status-chip.warn{background:var(--warn-soft);color:var(--warn)}
 .status-chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
 .status-chip.on .dot{box-shadow:0 0 8px var(--accent);animation:pulse 2s infinite}
 /* 纯展示件，不可点：光标不该显示成手型，否则会误导 */
@@ -743,6 +745,13 @@ select.input{font-family:var(--font-ui);cursor:pointer}
               <div class="hint">设备写入完成后需要复位并重启 bootloader；只有 EMS 会等待复位并回读版本，选 0（不等待）时 EMS 也不回读版本，DC / PCS / BMS 的固件由本板转发给下游从机，不等待也不校验版本</div>
             </div>
           </div>
+          <div class="set-row">
+            <div class="set-lbl"><b>强制释放串口</b><span>设备异常掉线后解锁端口</span></div>
+            <div class="set-ctl">
+              <button class="btn" id="uSerialRelease"><svg><use href="#i-refresh"/></svg>释放串口占用</button>
+              <div class="hint" id="uSerialReleaseHint">设备被拔掉或被别的程序抢占时，端口可能仍被浏览器锁着（顶栏显示「串口未释放」）。点这里强制解锁后再点连接即可。</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1242,6 +1251,27 @@ const I18N={
 '用户中止':'user_abort',
 '串口断开':'serial_closed',
 '设备或线缆已移除':'device or cable removed',
+'用户断开':'disconnected by the user',
+'串口句柄已释放，可直接重新连接':'port handle released, you can reconnect now',
+'串口未释放':'port not released',
+'端口可能仍被占用，请到「设置」页点「强制释放串口」后再连接':'The port may still be held; release it in Settings ("Force Release Port") and reconnect',
+'强制释放串口':'Force Release Port',
+'设备异常掉线后解锁端口':'Unlock the port after an unexpected disconnect',
+'释放串口占用':'Release the port',
+'设备被拔掉或被别的程序抢占时，端口可能仍被浏览器锁着（顶栏显示「串口未释放」）。点这里强制解锁后再点连接即可。':'When the device is unplugged or another program grabs the port, the browser may still hold it (the top bar shows "port not released"). Force it open here, then click Connect.',
+'串口释放失败：':'Port release failed: ',
+'（端口可能仍被占用，可在「设置」页点「强制释放串口」）':' (the port may still be held; use "Force Release Port" in Settings)',
+'强制释放完成 已关闭 ':'Force release done, closed ',
+' 个端口':' port(s)',
+'强制释放：仍有 ':'Force release: ',
+' 个端口关不掉（多半被其他程序独占）':' port(s) could not be closed (most likely held by another program)',
+'已释放本工具的占用，但串口仍被其他程序占用，请关掉那个程序再连':'This tool released its hold, but the port is still used by another program — close it and reconnect',
+'串口占用已释放，现在可以重新连接':'Port released, you can reconnect now',
+'（串口可能被其他程序占用，关掉那个程序后重试）':' (the port may be held by another program — close it and retry)',
+'（串口可能被其他程序或本工具的其他标签页占用，关掉后重试）':' (the port may be held by another program or another tab of this tool — close it and retry)',
+'打开串口失败':'Failed to open the port',
+'串口已断开，升级中止':'Serial disconnected, upgrade aborted',
+'串口已断开，升级中止：':'Serial disconnected, upgrade aborted: ',
 '用户点了中止按钮':'the user pressed Abort',
 /* ---------- 升级页 ---------- */
 '导入合成好的 .tcupd → 自动识别设备 → 逐台推送固件':'Import a built .tcupd → auto-detect devices → push firmware one by one',
@@ -2390,7 +2420,11 @@ function toast(msg,kind='ok'){
 /* =========================================================
    串口
    ========================================================= */
-const S={port:null,reader:null,writer:null,rx:new Uint8Array(0),waiters:[],connected:false};
+const S={port:null,reader:null,writer:null,rx:new Uint8Array(0),waiters:[],connected:false,stale:false};
+/* stale = 端口句柄可能还被浏览器占着。
+   设备被拔掉时 read() 只是抛错，锁与句柄都还在；此时界面显示「未连接」，
+   但别的程序打不开这个口、本工具再 open() 也会失败 —— 这就是「关不掉也连不上」。
+   置上这个标记，顶栏才能给用户一个明确提示和手动释放的入口。 */
 function frameCheck(f){let s=0;for(let i=2;i<f.length-1;i++)s=(s+f[i])&0xFF;return s;}
 function buildFrame(cmd,payload,addr=0){
   const p=payload||new Uint8Array(0);
@@ -2431,6 +2465,51 @@ function handleFrame(f){
     }
   }
 }
+/* 彻底释放一个串口句柄。
+   Web Serial 有三个坑叠在一起，就会变成「显示已断开，但口还占着」：
+     1) readable / writable 被 reader / writer 锁住时，port.close() 直接抛 InvalidStateError；
+     2) 设备被拔掉时 read() 抛错，锁不会自动解开，port.close() 同样关不掉；
+     3) 上面两步的异常若被吞掉，浏览器底层就一直占着这个设备：
+        别的程序打不开，本工具再 open() 也会因为「端口还开着」失败。
+   所以固定按 cancel → releaseLock → writer.close → writer.releaseLock → port.close 的顺序走，
+   任何一步失败都不中断后面的步骤，并把第一条错误返回给调用方记日志。 */
+async function releasePort(port,reader,writer){
+  let firstErr=null;
+  const fail=e=>{ if(!firstErr&&e) firstErr=e; };
+  try{ if(reader) await reader.cancel(); }catch(e){ fail(e); }
+  try{ if(reader) reader.releaseLock(); }catch(e){ fail(e); }
+  try{ if(writer) await writer.close(); }catch(e){ fail(e); }
+  try{ if(writer) writer.releaseLock(); }catch(e){ fail(e); }
+  try{ if(port) await port.close(); }catch(e){ fail(e); }
+  return firstErr;
+}
+/* 这两类错误说明句柄其实已经没了，不用当成「残留占用」：
+   NetworkError = 设备已经拔掉，驱动那边没有这个设备了；
+   InvalidStateError = 端口本来就没开着。 */
+function portReleased(e){
+  if(!e) return true;
+  const m=(e&&e.message)?String(e.message):String(e);
+  return /NetworkError|InvalidStateError|device|lost|not open|no longer/i.test(m);
+}
+/* 释放当前持有的串口，并把状态归零。
+   挂着的应答必须当场拒掉：否则每一包都要等满超时（现在重试 30 次），
+   端口早就没了还在那儿一轮轮地空等。 */
+async function releaseCurrent(){
+  const port=S.port,reader=S.reader,writer=S.writer;
+  S.port=S.reader=S.writer=null;
+  S.connected=false;
+  if(S.waiters.length){
+    S.waiters.forEach(w=>{ clearTimeout(w.timer); w.reject(new Error('串口已断开')); });
+    S.waiters=[];
+  }
+  const err=await releasePort(port,reader,writer);
+  if(err&&!portReleased(err)){
+    S.stale=true;
+    logU('err',`[fail] 串口释放失败：${err.message||err}（端口可能仍被占用，可在「设置」页点「强制释放串口」）`);
+  }else S.stale=false;
+  updateConnUI();
+  return err;
+}
 /* 读循环收尾：设备被物理拔掉时 read() 会抛错并跳出，若不在这里把 S.connected 落下，
    顶栏会一直亮着「已连接」，用户要等到下一次 writeFrame 才在深处看到报错，
    beforeunload 的误关拦截也会一直挂着。 */
@@ -2443,8 +2522,33 @@ async function readLoop(){
     if(r.value&&r.value.length) onBytes(r.value);
   }
   if(!S.connected) return;        /* 主动断开：serialDisconnect 已先行清标记 */
-  S.connected=false; S.reader=null; updateConnUI();
   logU('err','[fail] 串口已断开：'+(err&&err.message?err.message:'读取已结束'));
+  /* 设备被拔掉 ≠ 端口已释放：read() 抛错只是流报错，句柄和锁都还在。
+     这里必须补一次完整释放，否则这个设备一直被浏览器占着 ——
+     别的程序打不开，本工具也再也连不上。 */
+  await releaseCurrent();
+  logU('warn','串口句柄已释放，可直接重新连接');
+}
+/* 打开端口。失败时的处理顺序有讲究：
+   1) 退避重试 —— Windows 串口是独占的，别的工具刚放手时驱动要缓一下，
+      紧接着 open() 十有八九报 NetworkError，等一等通常就成；
+   2) 还不行就把浏览器里已授权的端口全部 close 一遍再试一次 ——
+      那些「本页面没有引用、浏览器却仍开着」的端口正是占着设备的真凶，
+      典型的就是上次设备被拔时留下的残留句柄。 */
+async function openPort(port,baud){
+  const opt={baudRate:baud,dataBits:8,stopBits:1,parity:'none',bufferSize:4096};
+  let lastErr=null;
+  for(let a=0;a<4;a++){
+    try{ await port.open(opt); return {ok:true}; }
+    catch(e){ lastErr=e; if(a<3) await sleep(400*(a+1)); }
+  }
+  try{
+    const ports=await navigator.serial.getPorts();
+    for(const p of ports){ try{ await p.close(); }catch(e){} }
+  }catch(e){}
+  try{ await port.open(opt); return {ok:true}; }
+  catch(e){ lastErr=e; }
+  return {ok:false,err:lastErr};
 }
 async function serialConnect(){
   if(!('serial' in navigator)){
@@ -2452,19 +2556,29 @@ async function serialConnect(){
     logU('err','[fail] 浏览器不支持 Web Serial API（需 Chrome/Edge 89+）');
     return false;
   }
+  /* 连接前先把手里的残留句柄清干净：上一次如果是异常断开的，
+     端口还开着，这次 open() 会直接失败（“端口已打开”）。 */
+  if(S.port||S.reader||S.writer) await releaseCurrent();
   try{
     const port=await navigator.serial.requestPort();
     const baud=parseInt($('#uBaud').value,10)||115200;
-    await port.open({baudRate:baud,dataBits:8,stopBits:1,parity:'none',bufferSize:4096});
+    const r=await openPort(port,baud);
+    if(!r.ok){
+      /* 失败后要把这次半开的端口也关掉，否则它又变成一个新的残留句柄。 */
+      try{ await port.close(); }catch(e){}
+      throw r.err||new Error('打开串口失败');
+    }
     S.port=port; S.reader=port.readable.getReader(); S.writer=port.writable.getWriter();
-    S.rx=new Uint8Array(0); S.connected=true;
+    S.rx=new Uint8Array(0); S.connected=true; S.stale=false;
     readLoop();
     updateConnUI();
     logU('ok',`串口连接 波特率=${baud} 数据位=8 停止位=1 校验位=N`); toast('串口已连接');
     return true;
   }catch(e){
     const m=(e&&e.message)?e.message:e;
-    logU('err','[fail] 连接失败：'+m); toast('连接失败：'+m,'err');
+    logU('err','[fail] 连接失败：'+m);
+    const busy=/NetworkError|busy|in use|occupied|占用/i.test(String(m));
+    toast('连接失败：'+m+(busy?'（串口可能被其他程序或本工具的其他标签页占用，关掉后重试）':''),'err');
     return false;
   }
 }
@@ -2472,14 +2586,33 @@ async function serialDisconnect(){
   /* 先清 connected 再 cancel：cancel 会让挂起的 read() 立刻收尾，
      readLoop 靠这个标记区分「用户主动断开」与「设备被拔」。 */
   S.connected=false;
-  try{ if(S.reader) await S.reader.cancel(); }catch(e){}
-  try{ if(S.reader) S.reader.releaseLock(); }catch(e){}
-  try{ if(S.writer){ await S.writer.close(); S.writer.releaseLock(); } }catch(e){}
-  try{ if(S.port) await S.port.close(); }catch(e){}
-  S.port=S.reader=S.writer=null; S.connected=false;
-  S.waiters.forEach(w=>{clearTimeout(w.timer);w.reject(new Error('已断开'));});
-  S.waiters=[];
-  updateConnUI(); logU('warn','串口断开 原因="设备或线缆已移除"');
+  await releaseCurrent();
+  logU('warn','串口断开 原因="用户断开"');
+}
+/* 手动强制释放：自动清理失败时的兜底。
+   除了本页面持有的句柄，还把浏览器里已授权、当前却没有引用的端口逐个关掉 ——
+   那才是「明明显示未连接，别的工具却打不开」的真凶。 */
+async function serialForceRelease(){
+  let n=0; const errs=[];
+  if(S.port||S.reader||S.writer){
+    const e=await releaseCurrent();
+    if(e&&!portReleased(e)) errs.push(e);
+    n++;
+  }
+  try{
+    const ports=await navigator.serial.getPorts();
+    for(const p of ports){
+      try{ await p.close(); n++; }catch(e){ if(!portReleased(e)) errs.push(e); }
+    }
+  }catch(e){ errs.push(e); }
+  S.stale=false; updateConnUI();
+  if(errs.length){
+    logU('warn',`[warn] 强制释放：仍有 ${errs.length} 个端口关不掉（多半被其他程序独占）`);
+    toast('已释放本工具的占用，但串口仍被其他程序占用，请关掉那个程序再连','warn');
+  }else{
+    logU('ok',`强制释放完成 已关闭 ${n} 个端口`);
+    toast('串口占用已释放，现在可以重新连接','ok');
+  }
 }
 async function writeFrame(cmd,payload,addr){
   if(!S.writer) throw new Error('串口未连接');
@@ -2512,12 +2645,20 @@ const le32=v=>{const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,v>>>
 const cat=(...a)=>{const n=a.reduce((x,y)=>x+y.length,0),o=new Uint8Array(n);let p=0;a.forEach(x=>{o.set(x,p);p+=x.length;});return o;};
 function updateConnUI(){
   const on=S.connected;
+  /* stale：设备掉线后句柄可能还挂在浏览器上。显示「未连接」会让人以为口是空的，
+     换个程序一连就报占用。这里单给一个状态，点「强制释放串口」即可解锁。 */
+  const stale=!on&&S.stale;
   $('#connChip').classList.toggle('on',on);
+  $('#connChip').classList.toggle('warn',stale);
   /* 顶栏只报连接状态与波特率。浏览器不提供 Windows 的 COM 号，
      唯一能程序化拿到的只有 VID:PID（你机器上 COM16/COM18 还都是
      FT232R 0403:6001，根本分不出是哪个口），显示它反而误导，
      所以这里不再出现任何串口标识。 */
-  setT('#connText',on?('已连接 @'+$('#uBaud').value):'未连接');
+  setT('#connText',on?('已连接 @'+$('#uBaud').value):stale?'串口未释放':'未连接');
+  $('#connChip').title=stale?tr('端口可能仍被占用，请到「设置」页点「强制释放串口」后再连接'):'串口状态';
+  /* 设置页那条提示跟着状态变黄：只有真占了端口才需要用户动手 */
+  const h=$('#uSerialReleaseHint');
+  if(h) h.style.color=stale?'var(--warn)':'';
   const btn=$('#uConnToggle');
   btn.className='btn btn-sm '+(on?'btn-danger':'btn-primary');
   btn.innerHTML=on
@@ -3010,6 +3151,9 @@ async function sendUpgrade(cmd,payload,expectSub,retry){
       w.cancel();
       last=err;
       if(STATE.abort) throw new Error('已中止');
+      /* 端口已经没了（拔线 / 被释放）：再重试下去每一发都会立刻抛「串口未连接」，
+         重试 30 次就是几十秒的空转，且看起来像设备不应答。直接中断本轮。 */
+      if(!S.connected) throw new Error('串口已断开，升级中止');
       if(a===rt) throw err;
       logU('warn',`[warn] sub 0x${hx(expectSub)} 第 ${a+1} 次无应答，重试…`);
       await sleep(60);
@@ -3262,6 +3406,15 @@ async function runPackageUpgrade(){
         failed=err;
         results.push({d,ok:false,err:err.message});
         logU('err',`设备升级失败 设备=${d.name} 原因="${err.message}"`);
+        /* 串口本身没了（拔线 / 被释放）：后面的台数全都发不出去，
+           逐台标失败只会刷一屏同样的错误 —— 整轮就此停下。 */
+        if(!S.connected){
+          doneBytes+=d.data.length;
+          setCur(d,'串口已断开','中断','err');
+          setNext('—','已中止');
+          setProgress(doneBytes/totalBytes*100,'err');
+          throw new Error(`串口已断开，升级中止：${err.message}`);
+        }
         if(!STATE.continueOnError){
           doneBytes+=d.data.length;
           setCur(d,'升级失败','失败','err');
@@ -3626,6 +3779,7 @@ function bind(){
     if(S.connected){ await serialDisconnect(); }
     else { await serialConnect(); }
   });
+  $('#uSerialRelease').addEventListener('click',async()=>{ await serialForceRelease(); });
   /* 顶栏状态芯片只做状态展示，不再跳转到设置页：
      看一眼连接状态是高频动作，跳页会打断当前操作；参数仍可从左侧「设置」进入。 */
   ['uBaud','uTimeout','uRetry','uResetWait','uLogSaveMax'].forEach(id=>$('#'+id).addEventListener('change',e=>{
