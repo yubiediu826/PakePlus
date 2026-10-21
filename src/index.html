@@ -263,6 +263,13 @@ select.input{font-family:var(--font-ui);cursor:pointer}
 .set-lbl span{display:block;font-size:11.5px;color:var(--fg-2);margin-top:2px}
 .set-ctl{max-width:360px}
 .set-ctl .input{width:100%}
+/* 一行并排放三个串口参数（数据位 / 校验位 / 停止位） */
+.row3{display:flex;gap:8px}
+.row3 .mini{display:flex;flex-direction:column;gap:4px;flex:1 1 0;min-width:0}
+.row3 .mini>span{font-size:10.5px;color:var(--fg-3)}
+.row3 .input{width:auto}
+/* 警示型提示：参数不匹配的排查线索都用这个色 */
+.hint.warn{color:var(--warn)}
 #sSaved{color:var(--accent);opacity:0;transition:opacity .3s}
 #sSaved.show{opacity:1}
 @media(max-width:760px){.set-row{grid-template-columns:1fr;gap:8px}.set-ctl{max-width:none}}
@@ -356,8 +363,11 @@ select.input{font-family:var(--font-ui);cursor:pointer}
 #page-upgrade .up-body>.card:first-child>.card-body{justify-content:flex-start;overflow:visible}
 /* 日志卡常驻展开：进度卡按内容取高，日志卡吃满剩余高度。
    #uLog 是确定高度链的末端，日志再多也只影响日志盒自身滚动。
-   min-height 给到 270px：统计底栏（胶囊 ~22px + margin-top 8px）现在占在卡体内，
+   min-height 给到 270px：底栏（胶囊 ~22px + margin-top 8px）现在占在卡体内，
    是实打实从日志盒身上切掉的高度，得先留够再给日志。
+   底栏合并成一行后（自动保存状态与收发统计同行）只切掉 ~30px，
+   但 270px 这条下限本身是按「两行底栏」时代定的，留着不动，
+   多出来的空间全部还给日志区 —— 不动它比重新配平更稳。
    高度链上 .card-body 是 min-height:0、卡片还带 overflow:hidden，
    内容撑不开外层，只能靠卡片自身的下限给日志区留位置。
    不给下限时实测日志区只剩 118px（约 5 行），排障时连一次握手都看不全；
@@ -450,8 +460,13 @@ select.input{font-family:var(--font-ui);cursor:pointer}
    真正压字的情况是最后几行 —— 日志滚到底时正文正贴着浮层，窄屏或长 hex 行
    直接钻到浮层底下叠在一起，看不清也选不中。
    底栏不遮任何一行，右对齐贴着卡片内边距，占的是本来就空着的下方空间。 */
+/* 底栏：左「自动保存」状态、右「收发次数」，同一行。
+   此前两者各自成行（.lauto 一行、.lstats 另一行），卡片底部要占两行；
+   并进 .lfoot 一个 flex 行后只占一行：右边统计仍然右对齐不缩，
+   左边状态吃掉剩余宽度。 */
+.lfoot{display:flex;align-items:center;gap:14px;margin-top:8px;flex:0 0 auto}
 .lstats{display:flex;align-items:center;justify-content:flex-end;gap:6px;
-  flex:0 0 auto;margin-top:8px}
+  flex:0 0 auto}
 .lstat{display:inline-flex;align-items:baseline;gap:4px;padding:2px 9px;border-radius:999px;
   background:var(--code-bg);border:1px solid var(--border);color:var(--fg-2);
   font-family:var(--font-mono);font-size:11px;line-height:1.5;white-space:nowrap}
@@ -463,8 +478,11 @@ select.input{font-family:var(--font-ui);cursor:pointer}
 /* 自动保存状态行：与底栏统计同一块区域，排在统计左边。
    文案全是动态的（累计条数 + 当前目录），不进 tr() 静态扫描，
    已在 I18N_SKIP 里登记，由 renderLogAutoInfo() 整段重写。 */
-.lauto{display:flex;align-items:center;gap:6px;margin:8px 0 0;
+.lauto{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;
   font-family:var(--font-mono);font-size:11px;color:var(--fg-3);line-height:1.5}
+/* 状态文案可能很长（目录未选择时那半句），窄屏要能截断，
+   而不是把右边的收发统计挤出可视区。 */
+.lauto .lat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lauto .lai{width:6px;height:6px;border-radius:50%;background:var(--fg-3);flex-shrink:0}
 .lauto.on .lai{background:var(--accent)}
 .lauto.warn .lai{background:var(--warn)}
@@ -699,6 +717,47 @@ select.input{font-family:var(--font-ui);cursor:pointer}
             </div>
           </div>
           <div class="set-row">
+            <div class="set-lbl"><b>数据位 / 校验位 / 停止位</b><span>与设备串口设置完全一致</span></div>
+            <div class="set-ctl">
+              <div class="row3">
+                <label class="mini"><span>数据位</span>
+                  <select class="input" id="uDataBits">
+                    <option value="8" selected>8</option>
+                    <option value="7">7</option>
+                  </select></label>
+                <label class="mini"><span>校验位</span>
+                  <select class="input" id="uParity">
+                    <option value="none" selected>无校验</option>
+                    <option value="even">偶校验</option>
+                    <option value="odd">奇校验</option>
+                  </select></label>
+                <label class="mini"><span>停止位</span>
+                  <select class="input" id="uStopBits">
+                    <option value="1" selected>1</option>
+                    <option value="2">2</option>
+                  </select></label>
+              </div>
+              <div class="hint">默认 8N1。官方上位机能通讯而本工具不能时，先照它的串口设置逐项核对 —— 波特率之外的任何一项不一致，收到的都会是解不开的乱码</div>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-lbl"><b>流控</b><span>默认无流控</span></div>
+            <div class="set-ctl">
+              <select class="input" id="uFlow">
+                <option value="none" selected>无流控</option>
+                <option value="hardware">硬件 (RTS/CTS)</option>
+              </select>
+              <div class="hint">设备若要求 RTS/CTS 就必须打开，否则帧长对不上，日志里全是无法解析的字节</div>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-lbl"><b>探测可用参数</b><span>自动试波特率与校验位</span></div>
+            <div class="set-ctl">
+              <button class="btn" id="uProbe">探测可用参数</button>
+              <div class="hint">官方上位机能通讯、这里只有乱码时先点这个：逐组试「波特率 × 校验位」，看哪一组能收到可解析的应答帧，找到后自动按该参数重连</div>
+            </div>
+          </div>
+          <div class="set-row">
             <div class="set-lbl"><b>ACK 超时</b><span>每包等待应答的上限</span></div>
             <div class="set-ctl">
               <select class="input" id="uTimeout">
@@ -862,20 +921,21 @@ select.input{font-family:var(--font-ui);cursor:pointer}
      重译走的是整行重画，本来就会重新排版，没必要再叠一次全量字体失效。
      纯英文日志不含汉字，钉成 zh-CN 不影响取字。 -->
           <div id="uLog" lang="zh-CN"></div>
-          <!-- 自动保存状态行：累计条数 + 当前写入目录，由 renderLogAutoInfo() 整段重写。 -->
-          <div class="lauto" id="uLogAutoInfo"><span class="lai"></span><span class="lat"></span></div>
-          <!-- 收发次数与总条数：日志框下方的底栏，右对齐。
+          <!-- 底栏：左「自动保存」状态、右「收发次数」，同一行。
                早先浮在右下角，但那是压在日志正文上的 —— 日志滚到底时最后几行
                正好贴在浮层底下，长 hex 行会叠在统计上，看不清也选不中。
-               底栏不遮行；高度用 .lstats 的 margin-top 8px + 胶囊自身 ~22px 换回来，
-               #uLogCard 的 min-height 也相应从 240px 提到了 270px。
+               底栏不遮行；#uLogCard 的 min-height 也相应从 240px 提到了 270px。
                文案不走 tr() 词典：「发送 / 接收 / 共 / 条」都是通用短词，
                全局替换会切碎「接收超时」这类长词条，由 renderLogStats() 直接写。 -->
-          <span class="lstats" id="uLogStat">
-            <span class="lstat tx"><span class="lk">[TX]</span><span class="lw" id="uLogTxW">发送</span><b id="uLogTx">0</b></span>
-            <span class="lstat rx"><span class="lk">[RX]</span><span class="lw" id="uLogRxW">接收</span><b id="uLogRx">0</b></span>
-            <span class="lstat"><span class="lw" id="uLogSumW">共</span><b id="uLogTotal">0</b><span class="lw" id="uLogUnit"> 条</span></span>
-          </span>
+          <div class="lfoot">
+            <!-- 自动保存状态行：累计条数 + 当前写入目录，由 renderLogAutoInfo() 整段重写。 -->
+            <div class="lauto" id="uLogAutoInfo"><span class="lai"></span><span class="lat"></span></div>
+            <span class="lstats" id="uLogStat">
+              <span class="lstat tx"><span class="lk">[TX]</span><span class="lw" id="uLogTxW">发送</span><b id="uLogTx">0</b></span>
+              <span class="lstat rx"><span class="lk">[RX]</span><span class="lw" id="uLogRxW">接收</span><b id="uLogRx">0</b></span>
+              <span class="lstat"><span class="lw" id="uLogSumW">共</span><b id="uLogTotal">0</b><span class="lw" id="uLogUnit"> 条</span></span>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -1085,7 +1145,8 @@ const I18N={
 ' s 供设备复位（仅 EMS 需要，其余三类不等待），可在「设置」页调整':' s for the device to reset (only the EMS needs this); adjustable in Settings',
 '总校验':'Total checksum',
 '跳过总校验':'Skipping checksum',
-' 固件已下载到本板 flash，下游从机由本板负责转发，跳过 CRC 总校验':' firmware is now in this board’s flash; the downstream slaves are fed by this board, so the CRC check is skipped',
+' 不在总校验范围，未下发 CRC 总校验':' is out of the checksum scope, so no CRC check was sent',
+'固件已写入，未做总校验':'Firmware written, no total checksum',
 '校验失败':'checksum FAILED',
 '包内没有可升级的固件，请确认 devmap 与 filesize':'No upgradeable firmware in the package; check devmap and filesize',
 '当前没有已导入的解析结果':'No parsed package loaded',
@@ -1166,7 +1227,6 @@ const I18N={
 '115200（固件默认）':'115200 (firmware default)',
 '中固定 ':' fixed at ',
 '协议':'Protocol',
-'存储':'Storage',
 '工具版本':'Tool Version',
 ' 秒':' s',
 'ACK 超时':'ACK Timeout',
@@ -1182,12 +1242,37 @@ const I18N={
 'EMS 固件完成后的等待秒数':'Seconds to wait after the EMS firmware finishes',
 '0（不等待）':'0 (no wait)',
 '设备写入完成后需要复位并重启 bootloader；只有 EMS 会等待复位并回读版本，选 0（不等待）时 EMS 也不回读版本，DC / PCS / BMS 的固件由本板转发给下游从机，不等待也不校验版本':'After writing, the device resets and restarts the bootloader. Only the EMS waits for that and reads its version back; with 0 (no wait) the EMS version is not read back either. DC / PCS / BMS firmware is forwarded to the downstream slaves by the board itself, with no wait and no version check',
-'[success] 可用':'[success] available',
-'[fail] 不可用（需 Chrome / Edge 89+）':'[fail] unavailable (needs Chrome / Edge 89+)',
-'8N1 · 无流控 · 从站地址 0x0000':'8N1 · no flow control · slave address 0x0000',
-'TCSD · AA AA + 地址 + 命令码 + 长度 + 数据域 + 校验':'TCSD · AA AA + addr + cmd + len + data + checksum',
-'参数保存在浏览器 localStorage':'Parameters are stored in browser localStorage',
-'v1.0 · 单文件 HTML':'v1.0 · single-file HTML',
+'无流控':'no flow control',
+'硬件 (RTS/CTS)':'hardware (RTS/CTS)',
+'默认无流控':'no flow control by default',
+'流控':'Flow Control',
+/* 串口参数探测 */
+'校验位=':'parity=',
+'探测可用参数':'Probe Parameters',
+'自动试波特率与校验位':'Try baud rates and parities automatically',
+'官方上位机能通讯、这里只有乱码时先点这个：逐组试「波特率 × 校验位」，看哪一组能收到可解析的应答帧，找到后自动按该参数重连':'If the vendor tool talks to the device fine but this one only sees garbage, click this first: it tries every baud rate × parity combination and keeps the one that returns a parseable reply frame, then reconnects with it',
+'升级进行中，先中止再探测':'An upgrade is running — abort it first, then probe',
+'请先连接串口，再点「探测可用参数」':'Connect the serial port first, then click "Probe Parameters"',
+'串口参数探测开始 候选=':'Serial parameter probe started, candidates=',
+' 组（数据位 8 / 停止位 1）':' combos (8 data bits / 1 stop bit)',
+'探测 ':'probe ',
+' bps / 校验位=':' bps / parity=',
+'收到可解析的应答帧':'a parseable reply frame came back',
+'无有效帧':'no valid frame',
+'探测完成：':'Probe finished: ',
+' 能收到可解析的应答帧，已按此参数重新连接':' returns a parseable reply frame; reconnected with these settings',
+'所有候选参数都没收到可解析的应答帧':'none of the candidate settings produced a parseable reply frame',
+'找到可用参数：':'Found working settings: ',
+' bps，校验位 ':' bps, parity ',
+'没找到可用参数，请看日志里的说明':'No working settings found — see the log for details',
+'  若官方上位机仍能通讯，那多半不是波特率或校验位的问题：浏览器的 Web Serial 打开串口时会一直拉高 DTR/RTS，网页无法拉低。若 USB 转串口芯片把 DTR 接到了 MCU 复位脚，设备会停在复位态、回读全是 0xFF —— 这种情况只能改接线（断开发射板上的 DTR 跳线）或改用原生程序':' If the vendor tool still talks to the device fine, the baud rate and parity are probably not the problem: the browser’s Web Serial API holds DTR/RTS asserted for as long as the port is open, and a web page cannot release them. If the USB-serial bridge wires DTR to the MCU reset pin, the device stays in reset and reads back as nothing but 0xFF — the only fix is to change the wiring (cut the DTR jumper on the board) or to use a native program',
+'数据位 / 校验位 / 停止位':'Data Bits / Parity / Stop Bits',
+'与设备串口设置完全一致':'Must match the device serial settings exactly',
+'无校验':'none',
+'偶校验':'even',
+'奇校验':'odd',
+'默认 8N1。官方上位机能通讯而本工具不能时，先照它的串口设置逐项核对 —— 波特率之外的任何一项不一致，收到的都会是解不开的乱码':'Default 8N1. If the vendor tool talks to the device fine but this one does not, compare its serial settings item by item — any mismatch other than the baud rate turns every received byte into unparsable garbage',
+'设备若要求 RTS/CTS 就必须打开，否则帧长对不上，日志里全是无法解析的字节':'If the device requires RTS/CTS this must be enabled, otherwise the frame length goes out of sync and the log fills with unparsable bytes',
 '已恢复默认':'Defaults restored',
 '已恢复默认参数':'Default parameters restored',
 /* ---------- 设置页 · 日志保存 ---------- */
@@ -1242,9 +1327,12 @@ const I18N={
 '导入完成':'imported',
 '序号':'idx',
 '串口连接':'serial_open',
-'数据位':'data',
-'停止位':'stop',
-'校验位':'parity',
+/* 这三条原先是 data/stop/parity 这类机器 token，但全文件没有任何地方消费它们
+   （tr() 的调用点与静态文案里都不出现「数据位/停止位/校验位」）。
+   现在它们只作为设置页三个小标签的译文出现，译成就地取准确的 UI 用词。 */
+'数据位':'Data Bits',
+'停止位':'Stop Bits',
+'校验位':'Parity',
 '工具就绪':'ready',
 '工具':'tool',
 '环境检查':'env_check',
@@ -1506,6 +1594,26 @@ const I18N={
 '升级标志=':'upgrade flag=',
 '设备上报升级失败（':'Device reported upgrade failure (',
 '未收到设备状态上报（设备已复位），按 CRC 一致判定为成功':'No status report received (the device has reset); a matching CRC is taken as success',
+'未收到设备状态上报（设备已复位），固件包已全部被设备接收，判定为成功':'No status report received (the device has reset); the firmware was received in full, so it is taken as success',
+/* 「回过话但拼不出帧」这一路的提示。设备回过数据却按当前参数解不开，
+   方向和「设备没回话」完全不同，措辞必须分开。
+   片段要比它内部的短词长，否则「字节」会先把长片段切碎。 */
+'收到 ':'received ',
+'从机回过数据但没拼出应答帧':'The device sent data but no reply frame could be assembled',
+'，按「已应答」继续；若整轮都这样，请核对串口参数（波特率 / 数据位 / 校验位 / 停止位）':', continuing as acknowledged; if this happens throughout, check the serial parameters (baud rate / data bits / parity / stop bits)',
+'，疑似串口参数与设备不一致':', the serial parameters probably do not match the device',
+'有回应（应答未解码）':'responded (reply not decoded)',
+'步的应答未能解码（设备有回应，但应答格式与本工具不一致）':' steps whose reply could not be decoded (the device responded, but the reply format does not match this tool)',
+'步的应答未能解码：设备有回应，但本工具按当前串口参数解不出应答帧，请在「设置」页核对波特率 / 数据位 / 校验位 / 停止位':' steps whose reply could not be decoded: the device responded, but this tool cannot decode the reply with the current serial parameters — check the baud rate / data bits / parity / stop bits in Settings',
+'本轮有 ':'had ',
+'本轮共有 ':'this round, ',
+'版本回读收到 ':'version readback got ',
+'步应答未解码）':' steps with undecoded replies)',
+'字节但未解析出升级状态上报（设备有回应），按 CRC 一致判定为成功':' bytes came back but no upgrade-status frame could be parsed (the device did respond); treated as success on matching CRC',
+'字节但未解析出版本帧（设备有回应），跳过本台版本校验':' bytes came back but no version frame could be parsed (the device did respond); skipping the version check for this device',
+'串口格式错误：':'Serial format error: ',
+'串口帧格式错误：':'Serial frame format error: ',
+'—— 设备回的数据按当前串口参数解不开（Framing error 多半是波特率或校验位与设备不一致），请到「设置」页核对波特率 / 数据位 / 校验位 / 停止位':' — the data coming back from the device cannot be decoded with the current serial parameters (a framing error usually means the baud rate or parity does not match the device); check the baud rate / data bits / parity / stop bits in Settings',
 '等待设备上报升级状态…':'Waiting for the device to report upgrade status…',
 '校验通过':'verified',
 '解析完成':'parse finished',
@@ -1517,7 +1625,6 @@ const I18N={
 '固件 ':'Firmware ',
 '升级中断：':'Upgrade interrupted: ',
 '尚未勾选任何带固件的设备':'No device with firmware is ticked yet',
-'跳过噪声字节':'Skipped noise bytes',
 ' 个':' noise byte(s)',
 '已生成':'Generated ',
 '本台完成后等待':'Wait after this device: ',
@@ -1693,10 +1800,14 @@ const SLOTS=[
  {key:'BMS',idx:7, cmd:0x31, name:'BMS', sub:'BMS 从控 · bms_dev',          devnum:'', version:'100', color:'#FBBF24', limit:0x16800, op:'<',  limitTxt:'< 90 KB'},
 ];
 const SLOT_BY_KEY=Object.fromEntries(SLOTS.map(s=>[s.key,s]));
-/* 需要执行 CRC 总校验（sub=4）的板子：只有 EMS 主控。
-   其余三类（BMS / 逆变器 / 充电板）只是把固件下载到本板 flash，
-   还要由本板转发给下游从机，写入结果不在本板校验范围内。 */
-const CRC_CHECK_KEYS=new Set(['EMS']);
+/* 需要执行 CRC 总校验（sub=4）的板子：DC / PCS / EMS / BMS 四类全做。
+   协议 3.21 把 0x30~0x3f 归为同一族升级命令，流程完全一致：
+   数据包全部发完后都要下 sub=4 总校验，设备侧回 ack=0 才算「一字节不差地收齐」。
+   早期版本只给 EMS 主控发这一步（理由是另外三类只是把固件下载到本板 flash、
+   还要由本板转发给下游从机，本板的校验说明不了从机结果），
+   但设备本身支持并要求这一步 —— 少发就等于放弃了传输完整性这道关口。
+   直接从 SLOTS 派生，新增板子时不会漏配。 */
+const CRC_CHECK_KEYS=new Set(SLOTS.map(s=>s.key));
 /* 需要做「复位后版本回读」校验的板子：同样只有 EMS 主控。
    太阳能板 / 逆变器 / Bms板 的固件也只下载到本板 flash，版本号要等本板
    转发给下游从机写完之后才会变 —— 实测固件发完立刻回读，拿到的仍是旧版本
@@ -2420,7 +2531,7 @@ function toast(msg,kind='ok'){
 /* =========================================================
    串口
    ========================================================= */
-const S={port:null,reader:null,writer:null,rx:new Uint8Array(0),waiters:[],connected:false,stale:false};
+const S={port:null,reader:null,writer:null,rx:new Uint8Array(0),waiters:[],connected:false,stale:false,okFrames:0,rxTotal:0,rawSeen:0,probing:false};
 /* stale = 端口句柄可能还被浏览器占着。
    设备被拔掉时 read() 只是抛错，锁与句柄都还在；此时界面显示「未连接」，
    但别的程序打不开这个口、本工具再 open() 也会失败 —— 这就是「关不掉也连不上」。
@@ -2435,22 +2546,80 @@ function buildFrame(cmd,payload,addr=0){
 }
 const toHex=b=>Array.from(b).map(x=>hx(x)).join(' ');
 
+/* 设备侧应答的整帧长度上限。设备侧最大的一帧是 0x01 版本应答：
+   数据域 65 B + 7 B 帧头帧尾 = 72 B。这里取 128 B 留一倍余量。
+   上限的作用是把「噪声里凑出来的假 AA AA」挡在门外 —— 长度字节取自垃圾时
+   能算出 255+7=262 的幻影长度，不设上限的话真应答会被它一直吞着。 */
+const RX_MAX_FRAME=128;
+/* 在 buf 里从 from 开始找第一对 AA AA，返回下标；找不到返回 -1。 */
+function findAA(buf,from){
+  for(let i=from;i+1<buf.length;i++) if(buf[i]===0xAA&&buf[i+1]===0xAA) return i;
+  return -1;
+}
+/* buf[off..off+total-1] 这一帧的校验和是否正确（与 frameCheck 同一算法）。 */
+function frameOkAt(buf,off,total){
+  let s=0;
+  for(let i=off+2;i<off+total-1;i++) s=(s+buf[i])&0xFF;
+  return s===buf[off+total-1];
+}
+/* 接收解析。目标只有一个：判断从机有没有应答。
+   帧格式固定（AA AA + 地址(2) + 命令码 + 长度 + 数据域 + 校验），
+   校验和是唯一的真伪判据，所以判定顺序就三步：
+     1) 在缓冲区里找 AA AA；
+     2) 头不足 7 字节 → 等下一块；按长度字节算出整帧长，收不齐 → 等下一块；
+     3) 收齐了算校验和：对 → 这就是应答，交给上层；
+        对不上 → 这个位置不是帧头（多半是垃圾里凑出来的），往后挪 1 字节继续找。
+   「挪 1 字节重扫」这条是关键：早期版本锁定在第一个 AA AA 上不回头，
+   垃圾里一对假 AA AA 就能让解析器永久失步，真应答全被吞掉。
+   末尾若是孤零零一个 0xAA 一定要留着 —— 它可能是被拆到下一块去的帧头前半截，
+   丢掉它剩下的字节就再也拼不出 AA AA，整帧报废。 */
 function onBytes(chunk){
+  /* rxTotal 记的是「一共收到多少字节」，与解不解得开无关。
+     应答判定要用它：设备明明回话了，只是这段数据按协议解不成帧，
+     那也属于「有回应」，不能报成无应答。 */
+  S.rxTotal+=chunk.length;
   const m=new Uint8Array(S.rx.length+chunk.length);
   m.set(S.rx,0); m.set(chunk,S.rx.length); S.rx=m;
-  while(S.rx.length>=2){
-    let i=0;
-    while(i+1<S.rx.length&&!(S.rx[i]===0xAA&&S.rx[i+1]===0xAA)) i++;
-    if(i>0){ logU('warn',`跳过噪声字节 ${i} 个`); S.rx=S.rx.slice(i); }
-    if(S.rx.length<7) return;
-    const len=S.rx[5], total=len+7;
-    if(S.rx.length<total) return;
-    const f=S.rx.slice(0,total); S.rx=S.rx.slice(total);
+  for(;;){
+    const h=findAA(S.rx,0);
+    if(h<0){
+      /* 不是帧头。末尾若是 0xAA 要留着 —— 它可能是被拆到下一块去的帧头前半截，
+         丢掉它剩下的字节就再也拼不出 AA AA，整帧直接报废。
+         其余直接丢掉，不统计、不打样本、不刷日志：
+         这些字节对「从机答没答」没有意义。 */
+      const keep=(S.rx.length&&S.rx[S.rx.length-1]===0xAA)?1:0;
+      S.rx=S.rx.slice(S.rx.length-keep);
+      return;
+    }
+    if(h>0) S.rx=S.rx.slice(h);                       // 跳过帧头之前的字节
+    if(S.rx.length<7) return;                         // 帧头没收齐，等
+    const total=S.rx[5]+7;
+    if(total>RX_MAX_FRAME){ S.rx=S.rx.slice(1); continue; }        // 长度离谱，这位置不是帧头
+    if(S.rx.length<total){
+      /* 帧没收齐。但长度字节可能本身就是垃圾（帧头被噪声打坏过），
+         算出来的 total 是幻影 —— 真帧会被一直吊在缓冲区里。
+         所以再看一眼后面有没有更靠得住的候选帧头：
+         若那个候选已经能拼出校验通过的帧，说明当前这个是假的，直接跳过去。
+         这里只做边界恢复，不计数、不打日志。 */
+      const h2=findAA(S.rx,2);
+      if(h2>=0&&S.rx.length-h2>=7){
+        const t2=S.rx[h2+5]+7;
+        if(t2<=RX_MAX_FRAME&&S.rx.length-h2>=t2&&frameOkAt(S.rx,h2,t2)){
+          S.rx=S.rx.slice(h2);
+          continue;
+        }
+      }
+      return;
+    }
+    if(!frameOkAt(S.rx,0,total)){ S.rx=S.rx.slice(1); continue; }  // 校验不过，往后挪一位
+    const f=S.rx.slice(0,total);
+    S.rx=S.rx.slice(total);
     handleFrame(f);
   }
 }
 function handleFrame(f){
   const ok=frameCheck(f)===f[f.length-1];
+  if(ok) S.okFrames++;
   const len=f[5], cmd=f[4];
   const sub=len>=1?f[6]:-1, ack=len>=2?f[7]:-1;
   const hex=toHex(f);
@@ -2491,6 +2660,15 @@ function portReleased(e){
   const m=(e&&e.message)?String(e.message):String(e);
   return /NetworkError|InvalidStateError|device|lost|not open|no longer/i.test(m);
 }
+/* 串口框架错误：驱动收到的字节与当前串口格式（波特率/数据位/校验位/停止位）
+   对不上，Windows 驱动直接抛 "Framing error"。
+   这跟「端口被别的程序占用」完全是两回事 —— 让人去点「强制释放串口」纯属白折腾，
+   该改的是串口参数。单独分一类，别混进「端口残留占用」那条路。 */
+function framingError(e){
+  if(!e) return false;
+  const m=((e&&e.message)?String(e.message):String(e))+' '+((e&&e.name)?String(e.name):'');
+  return /framing|parity|overrun|break condition/i.test(m);
+}
 /* 释放当前持有的串口，并把状态归零。
    挂着的应答必须当场拒掉：否则每一包都要等满超时（现在重试 30 次），
    端口早就没了还在那儿一轮轮地空等。 */
@@ -2504,8 +2682,15 @@ async function releaseCurrent(){
   }
   const err=await releasePort(port,reader,writer);
   if(err&&!portReleased(err)){
-    S.stale=true;
-    logU('err',`[fail] 串口释放失败：${err.message||err}（端口可能仍被占用，可在「设置」页点「强制释放串口」）`);
+    if(framingError(err)){
+      /* 框架错误不是占用问题：端口多半已经放掉了。点「强制释放串口」没用，
+         要改的是串口参数 —— 直接说清楚，别把人引到「端口被占用」那条死路上。 */
+      S.stale=false;
+      if(!S.probing) logU('err',`[fail] 串口格式错误：${err.message||err} —— 设备回的数据按当前串口参数解不开（Framing error 多半是波特率或校验位与设备不一致），请到「设置」页核对波特率 / 数据位 / 校验位 / 停止位`);
+    }else{
+      S.stale=true;
+      if(!S.probing) logU('err',`[fail] 串口释放失败：${err.message||err}（端口可能仍被占用，可在「设置」页点「强制释放串口」）`);
+    }
   }else S.stale=false;
   updateConnUI();
   return err;
@@ -2522,7 +2707,12 @@ async function readLoop(){
     if(r.value&&r.value.length) onBytes(r.value);
   }
   if(!S.connected) return;        /* 主动断开：serialDisconnect 已先行清标记 */
-  logU('err','[fail] 串口已断开：'+(err&&err.message?err.message:'读取已结束'));
+  if(S.probing) return;           /* 探测中：各组候选的读错误属正常现象，不刷屏 */
+  if(err&&framingError(err)){
+    /* 端口没断，是这一批字节的格式对不上（Framing error）。
+       说成「串口已断开」会让人以为线掉了，实际是串口参数与设备不一致。 */
+    logU('err',`[fail] 串口帧格式错误：${err.message||err} —— 设备回的数据按当前串口参数解不开（Framing error 通常是波特率或校验位与设备不一致），请到「设置」页核对波特率 / 数据位 / 校验位 / 停止位`);
+  }else logU('err','[fail] 串口已断开：'+(err&&err.message?err.message:'读取已结束'));
   /* 设备被拔掉 ≠ 端口已释放：read() 抛错只是流报错，句柄和锁都还在。
      这里必须补一次完整释放，否则这个设备一直被浏览器占着 ——
      别的程序打不开，本工具也再也连不上。 */
@@ -2535,18 +2725,30 @@ async function readLoop(){
    2) 还不行就把浏览器里已授权的端口全部 close 一遍再试一次 ——
       那些「本页面没有引用、浏览器却仍开着」的端口正是占着设备的真凶，
       典型的就是上次设备被拔时留下的残留句柄。 */
+/* 校验位在 Web Serial 里是 none/even/odd。这里用完整词而不是「无/偶/奇」——
+   单字「无」没法做 i18n 键（全局替换会切坏「无效」这类词），
+   完整词既能直接当译名，日志里也不会留下半个汉字。 */
+const PARITY_TXT={none:'无校验',even:'偶校验',odd:'奇校验'};
 async function openPort(port,baud){
-  const opt={baudRate:baud,dataBits:8,stopBits:1,parity:'none',bufferSize:4096};
+  /* 串口参数全部取自设置页。此前数据位/校验位/停止位是写死的 8N1、流控也没设 ——
+     官方上位机能正常通讯而本工具不能时，最常见的原因就是这几项对不上，
+     而工具连改它们的入口都没有。 */
+  const opt={baudRate:baud,
+    dataBits:parseInt($('#uDataBits').value,10)||8,
+    stopBits:parseInt($('#uStopBits').value,10)||1,
+    parity:$('#uParity').value||'none',
+    flowControl:$('#uFlow').value||'none',
+    bufferSize:4096};
   let lastErr=null;
   for(let a=0;a<4;a++){
-    try{ await port.open(opt); return {ok:true}; }
+    try{ await port.open(opt); return {ok:true,opt}; }
     catch(e){ lastErr=e; if(a<3) await sleep(400*(a+1)); }
   }
   try{
     const ports=await navigator.serial.getPorts();
     for(const p of ports){ try{ await p.close(); }catch(e){} }
   }catch(e){}
-  try{ await port.open(opt); return {ok:true}; }
+  try{ await port.open(opt); return {ok:true,opt}; }
   catch(e){ lastErr=e; }
   return {ok:false,err:lastErr};
 }
@@ -2559,6 +2761,12 @@ async function serialConnect(){
   /* 连接前先把手里的残留句柄清干净：上一次如果是异常断开的，
      端口还开着，这次 open() 会直接失败（“端口已打开”）。 */
   if(S.port||S.reader||S.writer) await releaseCurrent();
+  /* 7 位数据位按 Web Serial 规范只能配 none / even，配奇校验会直接开不了口。
+     这里提前纠正并说明，免得抛一个看不出所以然的 InvalidStateError。 */
+  if(($('#uDataBits').value==='7')&&($('#uParity').value==='odd')){
+    $('#uParity').value='even'; saveCfg();
+    toast('7 位数据位不支持奇校验，已自动改为偶校验','warn');
+  }
   try{
     const port=await navigator.serial.requestPort();
     const baud=parseInt($('#uBaud').value,10)||115200;
@@ -2570,9 +2778,15 @@ async function serialConnect(){
     }
     S.port=port; S.reader=port.readable.getReader(); S.writer=port.writable.getWriter();
     S.rx=new Uint8Array(0); S.connected=true; S.stale=false;
+    S.okFrames=0; S.rawSeen=0;
     readLoop();
     updateConnUI();
-    logU('ok',`串口连接 波特率=${baud} 数据位=8 停止位=1 校验位=N`); toast('串口已连接');
+    const o=r.opt;
+    /* 流控这里用 none / RTS/CTS 这种英文写法，和「数据位/停止位」一样是技术词。
+       写「无」的话单字「无」不能做 i18n 键（全局替换会切坏「无效」这类词）。 */
+    const flow=o.flowControl==='hardware'?'RTS/CTS':'none';
+    logU('ok',`串口连接 波特率=${o.baudRate} 数据位=${o.dataBits} 校验位=${PARITY_TXT[o.parity]||o.parity} 停止位=${o.stopBits} 流控=${flow}`);
+    toast('串口已连接');
     return true;
   }catch(e){
     const m=(e&&e.message)?e.message:e;
@@ -2588,6 +2802,79 @@ async function serialDisconnect(){
   S.connected=false;
   await releaseCurrent();
   logU('warn','串口断开 原因="用户断开"');
+}
+/* 候选参数：波特率 × 校验位。数据位固定 8、停止位固定 1 ——
+   7 位 / 2 停止位是少数派，手工改设置页就行，不值得让探测跑 70 多组。 */
+const PROBE_BAUDS=[115200,230400,57600,38400,19200,9600];
+const PROBE_PARITIES=['none','even','odd'];
+/* 串口参数探测：官方上位机能通讯、这里却只收到乱码时，用它把「能用的参数」找出来。
+   做法是逐组打开串口、发一条**只读**查询（命令码 0x01 读产品型号，数据域长度 0），
+   看能不能解出协议帧。改波特率必须 close 再 open，所以探测期间先把当前连接放掉，
+   结束后按找到的参数（或原参数）连回来。
+   探测时全程静默：噪声汇总、读错误都不打，免得刷屏把有用信息淹掉。 */
+async function probeSerialParams(){
+  if(STATE.running){ toast('升级进行中，先中止再探测','warn'); return; }
+  if(!S.connected||!S.port){ toast('请先连接串口，再点「探测可用参数」','warn'); return; }
+  const port=S.port;
+  const orig={baud:parseInt($('#uBaud').value,10)||115200,
+    parity:$('#uParity').value||'none',dataBits:parseInt($('#uDataBits').value,10)||8,
+    stopBits:parseInt($('#uStopBits').value,10)||1,flow:$('#uFlow').value||'none'};
+  const btn=$('#uProbe');
+  if(btn) btn.disabled=true;
+  S.probing=true;
+  logU('head',`串口参数探测开始 候选=${PROBE_BAUDS.length*PROBE_PARITIES.length} 组（数据位 8 / 停止位 1）`);
+  await releaseCurrent();
+  let found=null;
+  try{
+    for(const b of PROBE_BAUDS){
+      for(const p of PROBE_PARITIES){
+        const opt={baudRate:b,dataBits:8,stopBits:1,parity:p,flowControl:'none',bufferSize:4096};
+        try{ await port.open(opt); }catch(e){ continue; }
+        S.port=port; S.reader=port.readable.getReader(); S.writer=port.writable.getWriter();
+        S.connected=true; S.rx=new Uint8Array(0); S.rxTotal=0; S.okFrames=0;
+        readLoop();
+        const before=S.okFrames;
+        try{ await writeFrame(0x01,new Uint8Array(0),0); }catch(e){}
+        const t0=performance.now();
+        while(performance.now()-t0<600 && S.okFrames===before) await sleep(40);
+        const ok=S.okFrames>before;
+        logU('info',`  探测 ${b} bps / 校验位=${PARITY_TXT[p]} → ${ok?'收到可解析的应答帧':'无有效帧'}`);
+        await releaseCurrent();
+        if(ok){ found={baud:b,parity:p}; break; }
+      }
+      if(found) break;
+    }
+  }finally{
+    S.probing=false;
+    if(btn) btn.disabled=false;
+  }
+  /* 先把结论写进设置页，再重连 —— openPort 是从设置页读参数的，
+     顺序反了会用旧参数连回去。 */
+  if(found){
+    $('#uBaud').value=String(found.baud);
+    $('#uParity').value=found.parity;
+    $('#uDataBits').value='8'; $('#uStopBits').value='1';
+    saveCfg();
+  }
+  /* 不管探没探到，都把串口按结论重新连上，别把用户晾在断连状态。 */
+  const use=found||orig;
+  const r=await openPort(port,use.baud);
+  if(r.ok){
+    S.port=port; S.reader=port.readable.getReader(); S.writer=port.writable.getWriter();
+    S.rx=new Uint8Array(0); S.connected=true; S.stale=false;
+    S.okFrames=0; S.rawSeen=0;
+    readLoop(); updateConnUI();
+  }else{
+    S.connected=false; updateConnUI();
+  }
+  if(found){
+    logU('ok',`探测完成：${found.baud} bps / 校验位=${PARITY_TXT[found.parity]} 能收到可解析的应答帧，已按此参数重新连接`);
+    toast(`找到可用参数：${found.baud} bps，校验位 ${PARITY_TXT[found.parity]}`,'ok');
+  }else{
+    logU('err','探测完成：所有候选参数都没收到可解析的应答帧');
+    logU('err','  若官方上位机仍能通讯，那多半不是波特率或校验位的问题：浏览器的 Web Serial 打开串口时会一直拉高 DTR/RTS，网页无法拉低。若 USB 转串口芯片把 DTR 接到了 MCU 复位脚，设备会停在复位态、回读全是 0xFF —— 这种情况只能改接线（断开发射板上的 DTR 跳线）或改用原生程序');
+    toast('没找到可用参数，请看日志里的说明','err');
+  }
 }
 /* 手动强制释放：自动清理失败时的兜底。
    除了本页面持有的句柄，还把浏览器里已授权、当前却没有引用的端口逐个关掉 ——
@@ -2626,12 +2913,23 @@ function cancelWait(rec){
   if(i>=0) S.waiters.splice(i,1);
   if(rec.timer){ clearTimeout(rec.timer); rec.timer=0; }
 }
-function waitFrame(cmd,sub,timeout){
+/* 等待应答帧。rxBase 是发起等待时已收字节数的基线：
+   超时时若基线之后还收到了字节，说明设备**确实回话了**，只是这一段
+   数据解不成协议帧（起始标志/校验对不上）。这种情况绝不能报「无应答」——
+   设备已经收到命令并回应了，报无应答会让调用方把它当成没听见，一遍遍重发。 */
+function waitFrame(cmd,sub,timeout,rxBase){
   const rec={cmd,sub};
   const p=new Promise((resolve,reject)=>{
     rec.resolve=resolve; rec.reject=reject;
     rec.timer=setTimeout(()=>{ cancelWait(rec);
-      reject(new Error(`等待应答超时（cmd=0x${hx(cmd)} sub=0x${hx(sub)}）`)); },timeout);
+      const got=Math.max(0,S.rxTotal-(rxBase||0));
+      if(got>0){
+        /* 有回应但解不出帧：按「设备已应答」处理，把原始字节数带出去。 */
+        resolve({frame:null,cmd,sub,ack:-1,payload:null,raw:true,rawBytes:got});
+      }else{
+        reject(new Error(`等待应答超时（cmd=0x${hx(cmd)} sub=0x${hx(sub)}）`));
+      }
+    },timeout);
     S.waiters.push(rec);
   });
   /* 写帧失败时由调用方摘掉这个 waiter：否则它会一直挂到超时，
@@ -3101,6 +3399,8 @@ function pkgEntries(){
    未连接串口 / 未导入包等前置条件，点击后由 runPackageUpgrade 弹提示，而不是提前灰掉按钮。 */
 function refreshStartBtn(){
   $('#uStart').disabled=!!STATE.running;
+  /* 探测会关掉再打开串口，升级期间不能点。 */
+  const pb=$('#uProbe'); if(pb) pb.disabled=!!STATE.running;
 }
 /* 升级页默认全选：不再渲染勾选框 / 全选按钮 / 详情折叠，
    包信息只压缩成卡片标题栏的一行，设备逐台明细交给日志与制作页的包头预览。 */
@@ -3143,10 +3443,19 @@ async function sendUpgrade(cmd,payload,expectSub,retry){
     /* waiter 必须先挂再发：设备秒回应答时必须已经有人在听。
        但写帧可能抛错（拔线 / writer 已释放），此时 w 再也没人 await，
        必须立刻 cancel，否则就是上面注释里说的孤儿 waiter。 */
-    const w=waitFrame(cmd,expectSub==null?-1:expectSub,timeout);
+    const rxBase=S.rxTotal;
+    const w=waitFrame(cmd,expectSub==null?-1:expectSub,timeout,rxBase);
     try{
       await writeFrame(cmd,payload,addr);
-      return await w;
+      const r=await w;
+      /* 收到字节但拼不成帧：设备是回了话的，只是应答格式对不上。
+         按「已应答」往下走。这类情况整轮只提示一次 —— 逐包刷屏既拖慢界面，
+         又把真正该看的那条信息淹掉；次数记在 S.rawSeen 里，收尾时统一汇总。 */
+      if(r&&r.raw){
+        S.rawSeen++;
+        if(S.rawSeen===1) logU('warn','  从机回过数据但没拼出应答帧，按「已应答」继续；若整轮都这样，请核对串口参数（波特率 / 数据位 / 校验位 / 停止位）');
+      }
+      return r;
     }catch(err){
       w.cancel();
       last=err;
@@ -3154,7 +3463,12 @@ async function sendUpgrade(cmd,payload,expectSub,retry){
       /* 端口已经没了（拔线 / 被释放）：再重试下去每一发都会立刻抛「串口未连接」，
          重试 30 次就是几十秒的空转，且看起来像设备不应答。直接中断本轮。 */
       if(!S.connected) throw new Error('串口已断开，升级中止');
-      if(a===rt) throw err;
+      if(a===rt){
+        /* 超时但这段时间从机回过字节 → 是「回了但没拼出帧」，不是「没应答」。
+           这条线索塞进错误里，省得再回头猜。 */
+        if(S.rawSeen) err=new Error(`${err.message}（从机回过数据但没拼出应答帧，疑似串口参数与设备不一致）`);
+        throw err;
+      }
       logU('warn',`[warn] sub 0x${hx(expectSub)} 第 ${a+1} 次无应答，重试…`);
       await sleep(60);
     }
@@ -3162,6 +3476,10 @@ async function sendUpgrade(cmd,payload,expectSub,retry){
   throw last||new Error('通信失败');
 }
 function assertOk(r,what){
+  if(!r) throw new Error(`${what} 无应答`);
+  /* raw = 收到了字节但解不成协议帧。设备已经回应了，
+     只是应答格式与本工具对不上，不按失败处理。 */
+  if(r.raw) return;
   if(r.ack===0) return;
   if(r.ack>=2) throw new Error(`${what} 设备返回错误 ack=${r.ack}（${UP_ERR[r.ack]||'未知错误'}）`);
   throw new Error(`${what} 应答 ack=${r.ack}，非 0`);
@@ -3189,14 +3507,20 @@ async function upgradeOne(dev,ctx,t0){
   segEnter(dev.slotNo-1);
   setOverMeta(`第 ${dev.slotNo} / ${dev.slotTotal} 台`);
   setCur(dev,'校验设备号…','校验中'); setProgress(P(0));
+  /* undec 统计「收到字节但解不成应答帧」的步数。设备回了话却解不开时，
+     本轮不再按无应答空转重试，但结果里要如实标出来，不能当成干净的成功。 */
+  let undec=0;
   const r1=await sendUpgrade(dev.cmd,cat(new Uint8Array([1]),devnumBytes(dev.devnum)),1);
+  if(r1.raw) undec++;
   assertOk(r1,'设备号校验');
-  logU('ok',`设备号校验 设备=${dev.devnum} 结果=通过`);
+  logU('ok',`设备号校验 设备=${dev.devnum} 结果=${r1.raw?'有回应（应答未解码）':'通过'}`);
 
   setCur(dev,'下发参数…','下发中');
   const r2=await sendUpgrade(dev.cmd,cat(new Uint8Array([2]),le16(packCount)),2);
+  if(r2.raw) undec++;
   assertOk(r2,'包数下发');
   const r3=await sendUpgrade(dev.cmd,cat(new Uint8Array([3]),le32(size)),3);
+  if(r3.raw) undec++;
   assertOk(r3,'长度下发');
   logU('info',`参数下发 包数=${packCount} 字节=${size} sum16=0x${hx2(crc)}`);
 
@@ -3207,7 +3531,8 @@ async function upgradeOne(dev,ctx,t0){
    四台设备一轮下来近两千次无谓分配。cat() 本来就会把 chunk 拷进帧里。 */
 const chunk=dev.data.subarray(i*128,Math.min(size,(i+1)*128));
     const r=await sendUpgrade(dev.cmd,cat(new Uint8Array([5]),le16(i+1),chunk),5);
-    if(r.ack!==0) throw new Error(`第 ${i+1} 包应答 ack=${r.ack}`);
+    if(r.raw) undec++;
+    if(!r.raw && r.ack!==0) throw new Error(`第 ${i+1} 包应答 ack=${r.ack}`);
     sent++;
     const el=(performance.now()-t0)/1000;
     const kbs=(sent*128/1024)/Math.max(.001,el);
@@ -3231,32 +3556,50 @@ const chunk=dev.data.subarray(i*128,Math.min(size,(i+1)*128));
   }
   logU('ok',`数据传输完成 设备=${dev.name} 包数=${packCount} 字节=${size}`);
 
-  /* 总校验（sub=4）只对 EMS 主控有意义。
-     BMS / 逆变器 / 充电板的固件只是先下载到本板 flash，
-     之后还要由本板转发给下游从机写入 —— 此刻 flash 里的内容与
-     「从机已升级成功」没有对应关系，回一个 CRC 一致也说明不了任何事，
-     反而会因下游未写完而误报失败。因此这三类板子跳过总校验。 */
+  /* 总校验（sub=4）：协议 3.21 要求数据包全部发完后必须下发一次。
+     设备侧对收到的全部固件数据求和、与下发的 U16 比对，回 ack=0 才算收齐。
+     DC / PCS / EMS / BMS 四类统一执行（早期版本只给 EMS 发这一步）。 */
   if(CRC_CHECK_KEYS.has(dev.key)){
     setCur(dev,'总校验…','校验中');
     const r4=await sendUpgrade(dev.cmd,cat(new Uint8Array([4]),le16(crc)),4);
+    if(r4.raw) undec++;
     assertOk(r4,'CRC 校验');
-    logU('ok',`总校验 设备=${dev.name} CRC=0x${hx2(crc)} 结果=通过`);
+    logU('ok',`总校验 设备=${dev.name} CRC=0x${hx2(crc)} 结果=${r4.raw?'有回应（应答未解码）':'通过'}`);
   }else{
-    setCur(dev,'固件已写入本板 flash，设备即将复位','写入完成','ok');
-    logU('info',`  ${dev.name} 固件已下载到本板 flash，下游从机由本板负责转发，跳过 CRC 总校验`);
-    logU('ok',`固件已写入 设备=${dev.name} CRC总校验=跳过`);
+    /* 只留给本工具未收录的入口（如 LCD 0x34）。协议上 0x30~0x3f 都应执行 sub=4，
+       在这里被跳过就意味着少了「传输完整性」这道关口 —— 必须在日志里显式喊出来，
+       不能悄悄走成正常路径。 */
+    setCur(dev,'固件已写入，未做总校验','写入完成','wait');
+    logU('warn',`  ${dev.name} 不在总校验范围，未下发 CRC 总校验`);
+    logU('warn',`固件已写入 设备=${dev.name} CRC总校验=跳过`);
   }
 
   /* 协议 V7.1 3.21-6：升级状态由设备主动上报（不是上位机轮询）。
      注意此处标志语义与其余子命令相反 —— 其余应答标志 0=成功，本项升级标志 1=成功。 */
   setCur(dev,'等待设备上报升级状态…','等待中','wait'); setProgress(P(1),'wait');
   let status=null;
-  try{ status=await waitFrame(dev.cmd,6,Math.max(2500,timeout)); }
-  catch(e){ logU('warn','  未收到设备状态上报（设备已复位），按 CRC 一致判定为成功'); }
+  const stBase=S.rxTotal;
+  try{ status=await waitFrame(dev.cmd,6,Math.max(2500,timeout),stBase); }
+  catch(e){
+    /* 收不到状态上报时按 warn 放过、不判失败：设备写完 flash 就复位了，
+       状态上报本来就可能赶不上。四类板子都做过总校验，判据是「CRC 一致」；
+       只有不在总校验范围的入口才是「数据包全部被逐包 ACK 接收」。 */
+    logU('warn',CRC_CHECK_KEYS.has(dev.key)
+      ? '  未收到设备状态上报（设备已复位），按 CRC 一致判定为成功'
+      : '  未收到设备状态上报（设备已复位），固件包已全部被设备接收，判定为成功');
+  }
+  /* 收到字节但解不成状态帧：设备回过话，只是这段数据按协议解不开。
+     不能当成「上报了失败」（ack 读不出来不等于失败标志）。 */
+  if(status&&status.raw){
+    logU('warn',`  收到 ${status.rawBytes} 字节但未解析出升级状态上报（设备有回应），按 CRC 一致判定为成功`);
+    status=null;
+  }
   if(status){
     logU(status.ack===1?'ok':'err',`  设备上报升级状态：升级标志=${status.ack}（1 成功 / 0 失败）`);
     if(status.ack!==1) throw new Error(`设备上报升级失败（升级标志=${status.ack}）`);
   }
+  dev.undecoded=undec;
+  if(undec) logU('warn',`  ${dev.name} 本轮有 ${undec} 步的应答未能解码（设备有回应，但应答格式与本工具不一致）`);
   return true;
 }
 /* 复位后回读软件版本，确认固件真的生效了。
@@ -3311,6 +3654,11 @@ async function verifyVersionAfterReset(dev,waitSec){
     return false;
   }
   const p=r.payload;
+  if(r.raw){
+    logU('warn',`  [warn] 版本回读收到 ${r.rawBytes} 字节但未解析出版本帧（设备有回应），跳过本台版本校验`);
+    dev.actualVersion=null; dev.versionVerified=false;
+    return false;
+  }
   if(!p||p.length<VER_LEN){
     logU('warn',`  [warn] 版本应答长度异常：${p?p.length:0} B（期望 ≥ ${VER_LEN}），跳过本台版本校验`);
     dev.actualVersion=null; dev.versionVerified=false;
@@ -3457,7 +3805,11 @@ async function runPackageUpgrade(){
     }
     /* 逐台「包内 → 实测」对照：收尾时一眼看出哪台没刷上 */
     results.forEach(r=>logU(r.verified?'ok':(r.ok?(r.d.verSkipped?'info':'warn'):'err'),
-      `  ${r.d.name} ${r.d.devnum}　${verCell(r.d)}`));
+      `  ${r.d.name} ${r.d.devnum}　${verCell(r.d)}${r.d.undecoded?`　（${r.d.undecoded} 步应答未解码）`:''}`));
+    /* 有应答但解不开的步数单独汇总：这轮不是「干净的成功」。
+       设备回过话却按当前串口参数解不出应答帧，多半是波特率/校验位与设备不一致。 */
+    const undecN=results.reduce((a,r)=>a+(r.d.undecoded||0),0);
+    if(undecN) logU('warn',`本轮共有 ${undecN} 步的应答未能解码：设备有回应，但本工具按当前串口参数解不出应答帧，请在「设置」页核对波特率 / 数据位 / 校验位 / 停止位`);
     /* 这里不再放「版本校验」芯片：逐台结果行（日志尾部）已经逐台写了
        `EMS S240　V210 → V211`，芯片是同一份信息的重复；而且它在上一轮跑完
        后会一直挂到下一轮开跑，把「用时 / 平均速率」和当前进度混在一起。 */
@@ -3637,16 +3989,12 @@ function renderParse(){
   $('#pHexCard').style.display='';
   renderHexHeader(PS.raw,'#pHexDump');
 }
+/* 运行环境只留工具版本一行。其余几行（Web Serial 可用性、串口参数、协议、
+   存储位置）要么是设置页里已经有的东西，要么是写死的常量，
+   在这里重复一遍只会让人以为有两处要维护。 */
 function renderEnvRows(){
   const el=$('#sEnv'); if(!el) return;
-  const ok='serial' in navigator;
-  const rows=[
-    ['Web Serial API', ok?'[success] 可用':'[fail] 不可用（需 Chrome / Edge 89+）'],
-    ['串口参数', '8N1 · 无流控 · 从站地址 0x0000'],
-    ['协议', 'TCSD · AA AA + 地址 + 命令码 + 长度 + 数据域 + 校验'],
-    ['存储', '参数保存在浏览器 localStorage'],
-    ['工具版本', 'v1.0 · 单文件 HTML'],
-  ];
+  const rows=[['工具版本','V1.0.0']];
   el.innerHTML=rows.map(([k,v])=>`<div class="k">${esc(tr(k))}</div><div class="v">${esc(tr(v))}</div>`).join('');
 }
 
@@ -3668,6 +4016,7 @@ function saveCfg(){
     slots:STATE.slots.map(s=>({key:s.key,idx:s.idx,devnum:s.devnum,version:s.version})),
     baud:$('#uBaud').value,addr:$('#uAddr').value,timeout:$('#uTimeout').value,retry:$('#uRetry').value,
     resetWait:$('#uResetWait').value,logSaveMax:$('#uLogSaveMax').value,
+    dataBits:$('#uDataBits').value,parity:$('#uParity').value,stopBits:$('#uStopBits').value,flow:$('#uFlow').value,
   })); }catch(e){}
 }
 /* 防抖落盘：input 事件每敲一个字符就触发一次 saveCfg，
@@ -3686,6 +4035,11 @@ function loadCfg(){
     });
     if(c.baud)$('#uBaud').value=c.baud; if(c.addr)$('#uAddr').value=c.addr;
     if(c.timeout)$('#uTimeout').value=c.timeout; if(c.retry)$('#uRetry').value=c.retry;
+    /* 串口格式参数是后加的，老存档里没有 —— 缺省就留在 HTML 的出厂值上（8N1 / 无流控）。 */
+    if(c.dataBits)$('#uDataBits').value=c.dataBits;
+    if(c.parity)$('#uParity').value=c.parity;
+    if(c.stopBits)$('#uStopBits').value=c.stopBits;
+    if(c.flow)$('#uFlow').value=c.flow;
     if(c.resetWait!=null)$('#uResetWait').value=c.resetWait;
     /* 老存档没有 logSaveMax 字段：下拉保持 HTML 里的 2000 选中项，
        再由 applyLogSaveMax() 把阈值接上（默认值即 LOG_SAVE_MAX_DEF）。 */
@@ -3780,9 +4134,10 @@ function bind(){
     else { await serialConnect(); }
   });
   $('#uSerialRelease').addEventListener('click',async()=>{ await serialForceRelease(); });
+  $('#uProbe').addEventListener('click',async()=>{ await probeSerialParams(); });
   /* 顶栏状态芯片只做状态展示，不再跳转到设置页：
      看一眼连接状态是高频动作，跳页会打断当前操作；参数仍可从左侧「设置」进入。 */
-  ['uBaud','uTimeout','uRetry','uResetWait','uLogSaveMax'].forEach(id=>$('#'+id).addEventListener('change',e=>{
+  ['uBaud','uTimeout','uRetry','uResetWait','uLogSaveMax','uDataBits','uParity','uStopBits','uFlow'].forEach(id=>$('#'+id).addEventListener('change',e=>{
     if(id==='uLogSaveMax') applyLogSaveMax();
     saveCfg();
     const t=$('#sSaved'); t.classList.add('show');
@@ -3790,9 +4145,11 @@ function bind(){
     updateConnUI();
   }));
   $('#sReset').addEventListener('click',()=>{
-    /* 出厂值：波特率 115200 / 超时 1500ms / 重试 30 次 / 复位等待 15s / 日志满额 2000 条。
+    /* 出厂值：波特率 115200 / 格式 8N1 / 无流控 / 超时 1500ms / 重试 30 次 /
+       复位等待 15s / 日志满额 2000 条。
        改任何一个都要同步这里，否则「恢复默认」会把用户调过的参数又拉回去。 */
     $('#uBaud').value='115200'; $('#uTimeout').value='1500'; $('#uRetry').value='30'; $('#uResetWait').value='15';
+    $('#uDataBits').value='8'; $('#uParity').value='none'; $('#uStopBits').value='1'; $('#uFlow').value='none';
     $('#uLogSaveMax').value=String(LOG_SAVE_MAX_DEF); applyLogSaveMax();
     saveCfg(); updateConnUI();
     const t=$('#sSaved'); t.textContent=tr('已恢复默认'); t.classList.add('show');
